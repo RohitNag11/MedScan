@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 
 # load the DICOM files
-path = 'C:/Users/Rohit/OneDrive - Imperial College London/Documents/Important Documents/Imperial College/Mech Eng/ME4/FYP/Scans/MJM03_MJM04_Phantom1607,2002722m/R3W1B43U/TTCT0MWE'
+path = '/Users/rohit/Documents/Imperial/ME4/FYP/Sample Scans/MJM09_MJM010_Phantom1607,2003840n/R4G1B43W/TDS102WE'
 directory = os.fsencode(path)
 files = []
 
