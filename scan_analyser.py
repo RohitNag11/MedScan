@@ -50,11 +50,11 @@ img3d = np.zeros(img_shape)
 # points = []
 # densities = []
 # fill 3D array with the images from the files
-avg_density_per_layer = np.zeros(len(slices))
+avg_densities = np.zeros(len(slices))
 for k, slice in enumerate(slices):
     cross_section = slice.pixel_array
     img3d[:, :, k] = cross_section
-    avg_density_per_layer[k] = np.mean(cross_section)
+    avg_densities[k] = np.mean(cross_section)
     # print(k)
     # for j, row in enumerate(cross_section):
     #     for i, density in enumerate(row):
@@ -68,7 +68,16 @@ x = np.linspace(0, ps[0]*img_shape[0], img_shape[0], endpoint=False)
 y = np.linspace(0, ps[1]*img_shape[1], img_shape[1], endpoint=False)
 z = np.linspace(0, ss*img_shape[2], img_shape[2], endpoint=False)
 
-# plot density variation in axial direction:
+avg_densities_grad = np.gradient(avg_densities)
+min_z, max_z = np.argmax(avg_densities_grad) + \
+    10, np.argmin(avg_densities_grad) - 10
+filtered_avg_densities = avg_densities[min_z: max_z]
+filtered_z = np.linspace(min_z, max_z, len(
+    filtered_avg_densities), endpoint=False)
+
+filtered_avg_densities_grad3 = np.gradient(
+    np.gradient(np.gradient(filtered_avg_densities)))
+# # plot density variation in axial direction:
 # fig, ax = plt.subplots()
 # fig.suptitle(f'Patient {slices[0].PatientName}')
 # ax.set_title('Density Variation in the Axial Direction')
@@ -82,7 +91,8 @@ z = np.linspace(0, ss*img_shape[2], img_shape[2], endpoint=False)
 fig, ax = plt.subplots(2, 2)
 fig.tight_layout()
 fig.suptitle('Planar Slices Pixel Data')
-x_cut = img_shape[0]//2
+# x_cut = img_shape[0]//2
+x_cut = 350
 x_cut_color = 'orange'
 y_cut = img_shape[1]//2
 y_cut_color = 'lime'
@@ -112,5 +122,11 @@ ax[1, 0].set_xlabel('y')
 ax[1, 0].set_ylabel('x')
 ax[1, 0].axhline(y_cut, c=x_cut_color)
 ax[1, 0].axvline(x_cut, c=y_cut_color)
+
+ax[1, 1].set_title('Density Variation in the Axial Direction')
+ax[1, 1].set_ylabel('pixel value (density)')
+ax[1, 1].set_xlabel('z (mm)')
+ax[1, 1].plot(filtered_z, np.gradient(
+    np.gradient(np.gradient(filtered_avg_densities))))
 
 plt.show()
