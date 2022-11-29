@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 import os
+import cv2 as cv
 
 # load the DICOM files
 path = '/Users/rohit/Documents/Imperial/ME4/FYP/Sample Scans/MJM09_MJM010/MJM09_MJM010_Phantom1607,2003840n/R4G1B43W/TDS102WE'
@@ -34,6 +35,9 @@ print(f'slices[0].ImagePositionPatient: {slices[0].ImagePositionPatient}')
 print(f'slices[-1].ImagePositionPatient: {slices[-1].ImagePositionPatient}')
 
 min_true_z, max_true_z = slices[0].SliceLocation, slices[-1].SliceLocation
+
+print(max_true_z)
+print(min_true_z)
 print(f'min_true_z: {min_true_z}')
 z = np.linspace(0,
                 max_true_z - min_true_z,
