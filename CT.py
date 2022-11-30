@@ -2,10 +2,10 @@ import pydicom
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from mpl_toolkits.mplot3d import Axes3D
 import trimesh
 import cv2 as cv
 from matplotlib.patches import Polygon
+from matplotlib.widgets import Slider, Button
 
 
 class CT:
@@ -70,11 +70,17 @@ class CT:
 class BoneMesh:
     def __init__(self, path):
         self.mesh = self.__read_stl(path)
+        self.z_bounds = self.__get_z_bounds()
         return None
 
     def __read_stl(self, path):
         mesh = trimesh.load_mesh(path, file_type='stl')
         return mesh
+
+    def __get_z_bounds(self):
+        min_z = min(self.mesh.vertices[:, 2])
+        max_z = max(self.mesh.vertices[:, 2])
+        return [min_z, max_z]
 
     def get_z_section_points(self, z):
         section = self.mesh.section(
@@ -87,9 +93,9 @@ class BoneMesh:
         else:
             return [0, 0]
 
-    def get_z_section_polygon(self, z, label, ec='r', fc='#FFFFFF4A'):
+    def get_z_section_polygon(self, z, label='bone section', ec='r'):
         z_lt_section_points = self.get_z_section_points(z)
-        return Polygon(z_lt_section_points, label=label, edgecolor=ec, facecolor=fc)
+        return Polygon(z_lt_section_points, label=label, ec=ec, fc=ec+'40', lw=2)
 
 
 body_CT = CT(
@@ -98,20 +104,56 @@ lt_bone_mesh = BoneMesh(
     '/Users/rohit/Documents/Imperial/ME4/FYP/Sample Scans/MJM09_MJM010/MJM09_2003840N_Left Tibia.stl')
 rt_bone_mesh = BoneMesh(
     '/Users/rohit/Documents/Imperial/ME4/FYP/Sample Scans/MJM09_MJM010/MJM10_2003840N_Right Tibia.stl')
-k = 150
-z = body_CT.get_z_pos(k)
-z_img = body_CT.get_z_image(z)
-z_lt_poly = lt_bone_mesh.get_z_section_polygon(z, 'left tibia', 'r')
-z_rt_poly = rt_bone_mesh.get_z_section_polygon(z, 'right tibia', 'b')
+init_k = 150
+init_z = body_CT.get_z_pos(init_k)
+z_img = body_CT.get_z_image(init_z)
+z_lt_poly = lt_bone_mesh.get_z_section_polygon(init_z, 'Left Tibia', '#4DFF00')
+z_rt_poly = rt_bone_mesh.get_z_section_polygon(
+    init_z, 'Right Tibia', '#00D9FF')
 fig, ax = plt.subplots()
 ax.set_title('Axial Segmentation of Bones from CT Scan')
-ax.set_xlabel('x')
-ax.set_ylabel('y')
-ax.imshow(z_img, extent=np.array(
-    [body_CT.x_bounds, body_CT.y_bounds]).flatten())
+ax.set_xlabel('x (mm)')
+ax.set_ylabel('y (mm)')
+img = ax.imshow(z_img,
+                extent=np.array(
+                    [body_CT.x_bounds, body_CT.y_bounds]).flatten(),
+                cmap='magma')
 ax.add_patch(z_lt_poly)
 ax.add_patch(z_rt_poly)
-ax.legend()
+ax.legend(loc='lower right')
+cbar = plt.colorbar(img)
+cbar.minorticks_on()
+cbar.set_label('Pixel Intensities')
+
+# adjust the main plot to make room for the sliders
+fig.subplots_adjust(left=0.15)
+
+# Make a horizontal slider to control the frequency.
+# axk = fig.add_axes([0.25, 0.1, 0.65, 0.03])
+axk = fig.add_axes([0.1, 0.11, 0.02, 0.76])
+z_slider = Slider(
+    ax=axk,
+    label='z (mm)',
+    valmin=max(lt_bone_mesh.z_bounds[0], rt_bone_mesh.z_bounds[0]),
+    valmax=min(lt_bone_mesh.z_bounds[1], rt_bone_mesh.z_bounds[1]),
+    valinit=init_z,
+    orientation="vertical"
+)
+
+# The function to be called anytime a slider's value changes
+
+
+def update(val):
+    # z = body_CT.get_z_pos(int(val))
+    z = int(val)
+    img.set_data(body_CT.get_z_image(z))
+    z_lt_poly.set_xy(lt_bone_mesh.get_z_section_points(z))
+    z_rt_poly.set_xy(rt_bone_mesh.get_z_section_points(z))
+    fig.canvas.draw_idle()
+
+
+z_slider.on_changed(update)
+
 plt.show()
 # cv.imshow(f'ct image z={z}', a*255)
 # cv.waitKey(0)
