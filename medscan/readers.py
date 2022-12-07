@@ -7,7 +7,8 @@ import os
 
 
 class BoneMesh:
-    def __init__(self, path: str):
+    def __init__(self, path: str, name: str):
+        self.name = name
         self.mesh = self.__read_stl(path)
         self.z_bounds = self.__get_z_bounds()
         return None
@@ -24,13 +25,13 @@ class BoneMesh:
     def get_z_section_points(self, z: float):
         section = self.mesh.section(
             plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
-        order = section.vertex_nodes[:, 0]
-        raw_vertices = section.vertices[:, :2]
-        vertices = [raw_vertices[i] for i in order]
         if section:
-            return np.array(vertices)
+            order = section.vertex_nodes[:, 0]
+            raw_vertices = section.vertices[:, :2]
+            ordered_vertices = [raw_vertices[i] for i in order]
+            return np.array(ordered_vertices)
         else:
-            return np.array([0, 0])
+            return np.array([[0, 0], [0, 0]])
 
     def get_z_section_polygon(self, z: float, label='bone section', ec='r'):
         z_lt_section_points = self.get_z_section_points(z)
@@ -48,7 +49,7 @@ class DicomCT:
 
     def __get_planar_slices(self,
                             path: str,
-                            plane_orientation: tuple[int, int, int, int, int, int]):
+                            plane_orientation: tuple[int, int, int, int, int, int]) -> list[pydicom.FileDataset]:
         slices = []
         with os.scandir(path) as folder:
             for entry in folder:

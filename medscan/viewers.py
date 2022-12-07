@@ -1,15 +1,15 @@
 import medscan.readers as msr
+import medscan.segmenters as mss
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import Axes3D
 
 
-class SegmentedSliderPlot:
+class SegmentedRegionSliderPlot:
     def __init__(self,
                  body_CT: msr.DicomCT,
                  bone_meshes: list[msr.BoneMesh],
-                 labels: list[str],
                  colors: list[str]):
         self.body_CT = body_CT
         self.bone_meshes = bone_meshes
@@ -20,7 +20,7 @@ class SegmentedSliderPlot:
         self.img = ax.imshow(init_z_img,
                              extent=np.array([body_CT.x_bounds, body_CT.y_bounds]).flatten(), cmap='magma')
         self.polygons = [bone.get_z_section_polygon(self.init_z,
-                                                    labels[i],
+                                                    bone.name,
                                                     colors[i])
                          for i, bone in enumerate(bone_meshes)]
         [ax.add_patch(poly) for poly in self.polygons]
@@ -30,6 +30,63 @@ class SegmentedSliderPlot:
 
     def __get_z_lims(self):
         all_z_lims = np.array([mesh.z_bounds for mesh in self.bone_meshes])
+        min_valid_z = max(all_z_lims[:, 0])
+        max_valid_z = min(all_z_lims[:, 1])
+        return (min_valid_z, max_valid_z)
+
+    def __configure_plot(self, ax):
+        ax.set_title('Axial Segmentation of Bones from CT Scan')
+        ax.set_xlabel('x (mm)')
+        ax.set_ylabel('y (mm)')
+        ax.legend(loc='lower right')
+        cbar = plt.colorbar(self.img)
+        cbar.minorticks_on()
+        cbar.set_label('Pixel Intensities')
+
+    def __add_z_slider(self):
+        self.fig.subplots_adjust(left=0.15)
+        axk = self.fig.add_axes([0.1, 0.11, 0.02, 0.76])
+        z_slider = Slider(
+            ax=axk,
+            label='z (mm)',
+            valmin=self.z_lims[0],
+            valmax=self.z_lims[1],
+            valinit=self.init_z,
+            orientation="vertical"
+        )
+
+        def update(val):
+            z = int(val)
+            self.img.set_data(self.body_CT.get_z_image(z))
+            [poly.set_xy(self.bone_meshes[i].get_z_section_points(z))
+             for i, poly in enumerate(self.polygons)]
+            self.fig.canvas.draw_idle()
+        z_slider.on_changed(update)
+        return z_slider
+
+    def close(self):
+        plt.close(self.fig)
+
+
+class SegmentedImagesSliderPlot:
+    def __init__(self,
+                 segmenter: mss.SoftTissueSegmenter):
+        self.segmenter = segmenter
+        self.fig, ax = plt.subplots(len(segmenter.segmented_slices) + 1)
+        self.z_lims = self.__get_z_lims()
+        self.init_z = np.mean(self.z_lims)
+        init_z_raw_img = segmenter.body_CT.get_z_image(self.init_z)
+        self.raw_img = ax.imshow(init_z_raw_img, cmap='magma')
+        self.segmented_imgs = [ax.imshow()]
+        [ax.add_patch(poly) for poly in self.polygons]
+        self.__configure_plot(ax)
+        z_slider = self.__add_z_slider()
+        plt.show()
+
+    def __get_z_lims(self):
+        all_slices = self.segmenter.values()
+        all_z_lims = np.array([[slice[0].keys()[0], slice[-1].keys()[0]]
+                               for slice in all_slices])
         min_valid_z = max(all_z_lims[:, 0])
         max_valid_z = min(all_z_lims[:, 1])
         return (min_valid_z, max_valid_z)
@@ -131,7 +188,6 @@ class SegmentedSliderPlot:
 class Bone3DPlot:
     def __init__(self,
                  bone_meshes: list[msr.BoneMesh],
-                 labels: list[str],
                  colors: list[str]):
         # meshes = [bone_mesh.mesh for bone_mesh in bone_meshes]
         self.fig = plt.figure()
@@ -143,7 +199,7 @@ class Bone3DPlot:
                                     ec=colors[i],
                                     lw=0.1,
                                     color=f'{colors[i]}50',
-                                    label=labels[i])
+                                    label=bone.name)
                     for i, bone in enumerate(bone_meshes)]
         for trisurf in trisurfs:
             trisurf._edgecolors2d = trisurf._edgecolor3d
