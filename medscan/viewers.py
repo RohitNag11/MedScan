@@ -18,7 +18,7 @@ class SegmentedRegionSliderPlot:
         self.init_z = np.mean(self.z_lims)
         init_z_img = body_CT.get_z_image(self.init_z)
         self.img = ax.imshow(init_z_img,
-                             extent=np.array([body_CT.x_bounds, body_CT.y_bounds]).flatten(), cmap='magma')
+                             extent=np.array([body_CT.x_bounds, body_CT.y_bounds]).flatten(), cmap='turbo')
         self.polygons = [bone.get_z_section_polygon(self.init_z,
                                                     bone.name,
                                                     colors[i])
@@ -69,14 +69,13 @@ class SegmentedRegionSliderPlot:
 
 
 class SegmentedImagesSliderPlot:
-    def __init__(self,
-                 segmenter: mss.SoftTissueSegmenter):
+    def __init__(self, segmenter: mss.SoftTissueSegmenter):
         self.segmenter = segmenter
         self.fig, ax = plt.subplots(len(segmenter.segmented_slices) + 1)
         self.z_lims = self.__get_z_lims()
         self.init_z = np.mean(self.z_lims)
         init_z_raw_img = segmenter.body_CT.get_z_image(self.init_z)
-        self.raw_img = ax.imshow(init_z_raw_img, cmap='magma')
+        self.raw_img = ax.imshow(init_z_raw_img, cmap='turbo')
         self.segmented_imgs = [ax.imshow()]
         [ax.add_patch(poly) for poly in self.polygons]
         self.__configure_plot(ax)
@@ -214,3 +213,135 @@ class Bone3DPlot:
 
     def close(self):
         plt.close(self.fig)
+
+
+class Density4DPlot:
+    def __init__(self,
+                 segmenter: mss.SoftTissueSegmenter,
+                 bone_mesh: msr.BoneMesh,
+                 pixel_thres=0,
+                 slice_height=1000,
+                 point_size=0.02,
+                 lw=0,
+                 alpha=0.2,
+                 cmap='turbo'):
+        point_cloud = segmenter.segmented_point_cloud[bone_mesh.name]
+        x, y, z, p = point_cloud.T
+        max_z = bone_mesh.z_bounds[1]
+        min_z = max_z - slice_height
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.points = self.ax.scatter(x[(z > min_z) & (p > pixel_thres)],
+                                      y[(z > min_z) & (
+                                          p > pixel_thres)],
+                                      z[(z > min_z) & (
+                                          p > pixel_thres)],
+                                      c=p[(z > min_z) & (
+                                          p > pixel_thres)],
+                                      s=point_size,
+                                      alpha=alpha,
+                                      cmap=cmap)
+        self.configure_plot()
+        plt.show()
+
+    def configure_plot(self):
+        self.ax.set_aspect('equal')
+        self.ax.set_title('Left Tibia Point Cloud')
+        self.ax.set_xlabel('x')
+        self.ax.set_ylabel('y')
+        self.ax.set_zlabel('z')
+        cbar = self.fig.colorbar(self.points)
+        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_alpha(1)
+        cbar.draw_all()
+
+
+class Density4DSliderPlot:
+    def __init__(self,
+                 point_cloud,
+                 bone_mesh: msr.BoneMesh,
+                 pixel_thres=0,
+                 slice_height=1000,
+                 point_size=20,
+                 alpha=0.3,
+                 cmap='turbo'):
+        self.x, self.y, self.z, self.p = point_cloud.T
+        self.max_z = bone_mesh.z_bounds[1]
+        self.min_z = self.max_z - slice_height
+        self.fig = plt.figure()
+        ax = self.fig.add_subplot(111, projection='3d')
+        self.points = ax.scatter(self.x[(self.z > self.min_z) & (self.p > pixel_thres)],
+                                 self.y[(self.z > self.min_z) & (
+                                     self.p > pixel_thres)],
+                                 self.z[(self.z > self.min_z) & (
+                                     self.p > pixel_thres)],
+                                 c=self.p[(self.z > self.min_z) & (
+                                     self.p > pixel_thres)],
+                                 s=point_size,
+                                 lw=0,
+                                 alpha=alpha,
+                                 cmap=cmap)
+        self.configure_plot(ax)
+        pixel_thres_slider = self.__add_pixel_thres_slider()
+        plt.show()
+
+    def configure_plot(self, ax):
+        ax.set_aspect('equal')
+        ax.set_title('Left Tibia Point Cloud')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+        cbar = self.fig.colorbar(self.points)
+        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_alpha(1)
+        cbar.draw_all()
+
+    def __add_height_thres_slider(self, max_height_thres):
+        self.fig.subplots_adjust(left=0.15)
+        axk = self.fig.add_axes([0.1, 0.11, 0.02, 0.76])
+        height_thres_slider = Slider(
+            ax=axk,
+            label='height threshold (mm)',
+            valmin=0,
+            valmax=max_height_thres,
+            valinit=self.init_height_thres,
+            orientation="vertical"
+        )
+
+        def update(val):
+            min_z = self.max_z - val
+            print(min_z)
+            x = self.x[(self.z > min_z) & (self.p > self.init_pixel_thres)]
+            y = self.y[(self.z > min_z) & (self.p > self.init_pixel_thres)]
+            z = self.z[(self.z > min_z) & (self.p > self.init_pixel_thres)]
+            p = self.p[(self.z > min_z) & (self.p > self.init_pixel_thres)]
+            data = np.array([x, y, z, p]).T
+            self.points.set_offsets(data[:, :3])
+            self.points.set_array(data[:, 3])
+            self.fig.canvas.draw_idle()
+        height_thres_slider.on_changed(update)
+        return height_thres_slider
+
+    def __add_pixel_thres_slider(self):
+        self.fig.subplots_adjust(left=0.15)
+        axk = self.fig.add_axes([0.1, 0.11, 0.02, 0.76])
+        pixel_thres_slider = Slider(
+            ax=axk,
+            label='Pixel threshold',
+            valmin=0,
+            valmax=500,
+            valinit=0,
+            orientation="vertical",
+        )
+
+        def update(val):
+            x = self.x[(self.z > self.min_z) & (self.p > val)]
+            y = self.y[(self.z > self.min_z) & (self.p > val)]
+            z = self.z[(self.z > self.min_z) & (self.p > val)]
+            p = self.p[(self.z > self.min_z) & (self.p > val)]
+            data = np.array([x, y, z, p]).T
+            self.points.set_offsets(data[:, :3])
+            self.points.set_array(data[:, 3])
+            self.fig.canvas.draw_idle()
+        pixel_thres_slider.on_changed(update)
+        return pixel_thres_slider
