@@ -2,8 +2,9 @@ import medscan.readers as msr
 import medscan.segmenters as mss
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.widgets import Slider, Button, RadioButtons
+import numpy as np
 
 
 class SegmentedRegionSliderPlot:
@@ -215,6 +216,56 @@ class Bone3DPlot:
         plt.close(self.fig)
 
 
+class PointCloudPlot:
+    def __init__(self, point_cloud, title='Point Cloud'):
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        x, y, z, p = point_cloud.T
+        self.points = self.ax.scatter(x, y, z, c=p,
+                                      s=0.1,
+                                      alpha=0.2)
+        self.configure_plot(title)
+        plt.show()
+
+    def configure_plot(self, title):
+        self.ax.set_aspect('equal')
+        self.ax.set_title(title)
+        self.ax.set_xlabel('x')
+        self.ax.set_ylabel('y')
+        self.ax.set_zlabel('z')
+        cbar = self.fig.colorbar(self.points)
+        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_alpha(1)
+        cbar.draw_all()
+
+
+class CombinedTibia4DPlot:
+    def __init__(self,
+                 segmenter: mss.SoftTissueSegmenter,
+                 bone_meshes: list[msr.BoneMesh]):
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        for bone_mesh in bone_meshes:
+            point_cloud = segmenter.segmented_point_clouds[bone_mesh.name]
+            x, y, z, p = point_cloud.T
+            self.points = self.ax.scatter(x, y, z, c=p,
+                                          s=0.01,
+                                          alpha=0.2)
+        self.configure_plot()
+        plt.show()
+
+    def configure_plot(self):
+        self.ax.set_aspect('equal')
+        self.ax.set_title('Tibias Point Cloud')
+        self.ax.set_xlabel('x')
+        self.ax.set_ylabel('y')
+        self.ax.set_zlabel('z')
+        cbar = self.fig.colorbar(self.points)
+        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_alpha(1)
+        cbar.draw_all()
+
+
 class Density4DPlot:
     def __init__(self,
                  segmenter: mss.SoftTissueSegmenter,
@@ -225,7 +276,7 @@ class Density4DPlot:
                  lw=0,
                  alpha=0.2,
                  cmap='turbo'):
-        point_cloud = segmenter.segmented_point_cloud[bone_mesh.name]
+        point_cloud = segmenter.segmented_point_clouds[bone_mesh.name]
         x, y, z, p = point_cloud.T
         max_z = bone_mesh.z_bounds[1]
         min_z = max_z - slice_height
@@ -345,3 +396,62 @@ class Density4DSliderPlot:
             self.fig.canvas.draw_idle()
         pixel_thres_slider.on_changed(update)
         return pixel_thres_slider
+
+
+class DensityThresholdPlot:
+    def __init__(self, point_cloud, title='Density Threshold Plot'):
+        self.x = point_cloud[:, 0]
+        self.y = point_cloud[:, 1]
+        self.z = point_cloud[:, 2]
+        self.density = point_cloud[:, 3]
+        self.min_density = min(self.density)
+        self.max_density = max(self.density)
+        self.min_value_init = self.min_density + self.max_density / 2
+        self.title = title
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+
+    def __configure_plot(self, ax):
+        self.ax.set_xlabel('x')
+        self.ax.set_ylabel('y')
+        self.ax.set_zlabel('z')
+        self.ax.set_aspect('equal')
+        self.ax.set_xlim(min(self.x), max(self.x))
+        self.ax.set_ylim(min(self.y), max(self.y))
+        self.ax.set_title(self.title)
+
+    def plot(self):
+        s_min = plt.axes([0.25, 0.1, 0.65, 0.03])
+        s_max = plt.axes([0.25, 0.15, 0.65, 0.03])
+
+        self.min_density_slider = Slider(
+            s_min, 'Min Density', self.min_density, self.max_density, valinit=self.min_value_init)
+        self.max_density_slider = Slider(
+            s_max, 'Max Density', self.min_density, self.max_density, valinit=self.max_density)
+        mask = (self.density > self.min_density_slider.val) & (
+            self.density < self.max_density_slider.val)
+        self.ax.scatter(self.x[mask], self.y[mask],
+                        self.z[mask], c=self.density[mask], s=0.3)
+        self.__configure_plot(self.ax)
+
+        def update(val):
+            mask = (self.density > self.min_density_slider.val) & (
+                self.density < self.max_density_slider.val)
+            self.ax.clear()
+            self.ax.scatter(self.x[mask], self.y[mask],
+                            self.z[mask], c=self.density[mask], s=0.3)
+            self.__configure_plot(self.ax)
+            self.fig.canvas.draw_idle()
+
+        self.min_density_slider.on_changed(update)
+        self.max_density_slider.on_changed(update)
+
+        reset_axes = plt.axes([0.8, 0.025, 0.1, 0.04])
+        button = Button(reset_axes, 'Reset', hovercolor='0.975')
+
+        def reset(event):
+            self.min_density_slider.reset()
+            self.max_density_slider.reset()
+
+        button.on_clicked(reset)
+        plt.show()
