@@ -3,6 +3,14 @@ import numpy as np
 
 class PointCloudManipulator:
     def __init__(self, medial_point_cloud):
+        self.original_x_bounds = (min(medial_point_cloud[:, 0]),
+                                  max(medial_point_cloud[:, 0]))
+        self.original_y_bounds = (min(medial_point_cloud[:, 1]),
+                                  max(medial_point_cloud[:, 1]))
+        self.original_z_bounds = (min(medial_point_cloud[:, 2]),
+                                  max(medial_point_cloud[:, 2]))
+        self.original_density_bounds = (min(medial_point_cloud[:, 3]),
+                                        max(medial_point_cloud[:, 3]))
         self.roi_points = medial_point_cloud
         centered_points = self.__get_centered_point_cloud(
             self.roi_points)

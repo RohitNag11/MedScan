@@ -19,8 +19,8 @@ def get_poly_image(poly_pixels, ni, nj):
     img = np.zeros(img_dim)
     cv2.fillPoly(img,
                  pts=[poly_pixels],
-                 color=(255, 255, 255))
-    return img
+                 color=255)
+    return img / 255
 
 
 def project_points_to_plane(points, normal, point_on_plane=np.array([0, 0, 0])):
@@ -29,3 +29,7 @@ def project_points_to_plane(points, normal, point_on_plane=np.array([0, 0, 0])):
     # Calculate the projection of the points onto the plane
     projections = points - np.outer(d, normal)
     return projections
+
+
+def tetrahedron_volume(a, b, c, d):
+    return np.abs(np.einsum('ij,ij->i', a-d, np.cross(b-d, c-d))) / 6

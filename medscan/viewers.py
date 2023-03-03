@@ -1,9 +1,11 @@
 import medscan.readers as msr
 import medscan.segmenters as mss
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.widgets import Slider, Button, RadioButtons
+from matplotlib.widgets import Slider, Button, RadioButtons, RangeSlider
 import numpy as np
 
 
@@ -11,23 +13,34 @@ class SegmentedRegionSliderPlot:
     def __init__(self,
                  body_CT: msr.DicomCT,
                  bone_meshes: list[msr.BoneMesh],
+                 callibrate: bool,
                  colors: list[str]):
         self.body_CT = body_CT
         self.bone_meshes = bone_meshes
+        self.callibrate = callibrate
         self.fig, ax = plt.subplots()
         self.z_lims = self.__get_z_lims()
         self.init_z = np.mean(self.z_lims)
-        init_z_img = body_CT.get_z_image(self.init_z)
+        init_z_img = body_CT.get_z_image(
+            self.init_z, callibrate=self.callibrate)
         self.img = ax.imshow(init_z_img,
-                             extent=np.array([body_CT.x_bounds, body_CT.y_bounds]).flatten(), cmap='turbo')
+                             extent=np.array([body_CT.x_bounds, body_CT.y_bounds]).flatten(), cmap='magma')
         self.polygons = [bone.get_z_section_polygon(self.init_z,
                                                     bone.name,
                                                     colors[i])
                          for i, bone in enumerate(bone_meshes)]
         [ax.add_patch(poly) for poly in self.polygons]
         self.__configure_plot(ax)
-        z_slider = self.__add_z_slider()
-        plt.show()
+        self.fig.subplots_adjust(left=0.15)
+        self.z_slider_ax = self.fig.add_axes([0.1, 0.11, 0.02, 0.76])
+        self.z_slider = Slider(
+            ax=self.z_slider_ax,
+            label='z (mm)',
+            valmin=self.z_lims[0],
+            valmax=self.z_lims[1],
+            valinit=self.init_z,
+            orientation="vertical"
+        )
 
     def __get_z_lims(self):
         all_z_lims = np.array([mesh.z_bounds for mesh in self.bone_meshes])
@@ -37,33 +50,23 @@ class SegmentedRegionSliderPlot:
 
     def __configure_plot(self, ax):
         ax.set_title('Axial Segmentation of Bones from CT Scan')
-        ax.set_xlabel('x (mm)')
-        ax.set_ylabel('y (mm)')
+        ax.set_xlabel('$x$ (mm)')
+        ax.set_ylabel('$y$ (mm)')
         ax.legend(loc='lower right')
         cbar = plt.colorbar(self.img)
         cbar.minorticks_on()
-        cbar.set_label('Pixel Intensities')
+        cbar.set_label('Density (HU)')
 
-    def __add_z_slider(self):
-        self.fig.subplots_adjust(left=0.15)
-        axk = self.fig.add_axes([0.1, 0.11, 0.02, 0.76])
-        z_slider = Slider(
-            ax=axk,
-            label='z (mm)',
-            valmin=self.z_lims[0],
-            valmax=self.z_lims[1],
-            valinit=self.init_z,
-            orientation="vertical"
-        )
-
+    def show(self):
         def update(val):
             z = int(val)
-            self.img.set_data(self.body_CT.get_z_image(z))
+            self.img.set_data(self.body_CT.get_z_image(
+                z, callibrate=self.callibrate))
             [poly.set_xy(self.bone_meshes[i].get_z_section_points(z))
              for i, poly in enumerate(self.polygons)]
             self.fig.canvas.draw_idle()
-        z_slider.on_changed(update)
-        return z_slider
+        self.z_slider.on_changed(update)
+        plt.show()
 
     def close(self):
         plt.close(self.fig)
@@ -76,7 +79,7 @@ class SegmentedImagesSliderPlot:
         self.z_lims = self.__get_z_lims()
         self.init_z = np.mean(self.z_lims)
         init_z_raw_img = segmenter.body_CT.get_z_image(self.init_z)
-        self.raw_img = ax.imshow(init_z_raw_img, cmap='turbo')
+        self.raw_img = ax.imshow(init_z_raw_img, cmap='magma')
         self.segmented_imgs = [ax.imshow()]
         [ax.add_patch(poly) for poly in self.polygons]
         self.__configure_plot(ax)
@@ -93,12 +96,12 @@ class SegmentedImagesSliderPlot:
 
     def __configure_plot(self, ax):
         ax.set_title('Axial Segmentation of Bones from CT Scan')
-        ax.set_xlabel('x (mm)')
-        ax.set_ylabel('y (mm)')
+        ax.set_xlabel('$x$ (mm)')
+        ax.set_ylabel('$y$ (mm)')
         ax.legend(loc='lower right')
         cbar = plt.colorbar(self.img)
         cbar.minorticks_on()
-        cbar.set_label('Pixel Intensities')
+        cbar.set_label('Density (HU)')
 
     def __add_z_slider(self):
         self.fig.subplots_adjust(left=0.15)
@@ -123,66 +126,6 @@ class SegmentedImagesSliderPlot:
 
     def close(self):
         plt.close(self.fig)
-
-
-# class CTOverviewPlot:
-#     def __init__(self,
-#                  body_CT: msr.DicomCT):
-#         self.slices = body_CT.axial_slices
-#         min_true_z, max_true_z = body_CT.z_bounds
-#         # create 3D array
-#         self.img3d = self.__get_img_3d()
-#         # fill 3D array with the images from the files
-#         self.avg_densities = self.__get_avg_densities()
-#         self.avg_densities_grad = np.gradient(self.avg_densities)
-#         self.z_cutoffs = self.__get_z_cutoffs()
-#         self.filtered_avg_densities_grad2 = self.__get_filtered_avg_densities_grad2()
-
-#         x_cut = 300
-#         x_cut_color = 'orange'
-#         y_cut = np.mean(body_CT.y_bounds)
-#         y_cut_color = 'lime'
-#         # z_cut = img_shape[2]//2
-#         z_cut = np.argmax(self.filtered_avg_densities_grad2)
-#         z_cut_color = 'red'
-
-#         self.fig = plt.figure(layout="constrained")
-#         subfigs = self.fig.subfigures(1, 2, wspace=0, width_ratios=[2, 1])
-#         subfigs[0].set_facecolor('0.9')
-#         subfigs[0].suptitle(f'Raw CT Scan Pixel Data')
-#         axs0 = subfigs[0].subplots()
-#         axial_img = self.img3d[:, :, z_cut]
-#         axs0.imshow(axial_img,
-#                     origin='lower',
-#                     aspect=body_CT.dx / body_CT.dy,)
-#         axs0.set_title(f'Axial Plane, z={z_cut}', c=z_cut_color)
-#         axs0.set_xlabel('x (mm)')
-#         axs0.set_ylabel('y (mm)')
-#         axs0.axhline(y_cut, c=y_cut_color, alpha=0.5)
-#         axs0.axvline(x_cut, c=x_cut_color, alpha=0.5)
-#         plt.show()
-
-#     def __get_img_3d(self):
-#         img_shape = self.slices[0].pixel_array.shape + (len(self.slices), )
-#         return np.zeros(img_shape)
-
-#     def __get_avg_densities(self):
-#         avg_densities = np.zeros(len(self.slices))
-#         for k, slice in enumerate(self.slices):
-#             cross_section = slice.pixel_array
-#             self.img3d[:, :, k] = cross_section
-#             avg_densities[k] = np.mean(cross_section)
-#         return avg_densities
-
-#     def __get_z_cutoffs(self):
-#         return (np.argmax(self.avg_densities_grad) + 10,
-#                 np.argmin(self.avg_densities_grad) - 10)
-
-#     def __get_filtered_avg_densities_grad2(self):
-#         filtered_avg_densities_grad2 = np.gradient(self.avg_densities_grad)
-#         filtered_avg_densities_grad2[:self.z_cutoffs[0]] = 0
-#         filtered_avg_densities_grad2[self.z_cutoffs[1]:] = 0
-#         return filtered_avg_densities_grad2
 
 
 class Bone3DPlot:
@@ -206,10 +149,12 @@ class Bone3DPlot:
             trisurf._facecolors2d = trisurf._facecolor3d
         scale = bone_meshes[0].mesh.vertices.flatten()
         ax.auto_scale_xyz(scale, scale, scale)
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
+        ax.set_xlabel('$x$')
+        ax.set_ylabel('$y$')
+        ax.set_zlabel('$z$')
         ax.legend()
+
+    def show(self):
         plt.show()
 
     def close(self):
@@ -217,24 +162,35 @@ class Bone3DPlot:
 
 
 class PointCloudPlot:
-    def __init__(self, point_cloud, title='Point Cloud'):
+    def __init__(self, point_cloud, normalised=False, title='Point Cloud', s=2, a=1):
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
-        x, y, z, p = point_cloud.T
-        self.points = self.ax.scatter(x, y, z, c=p,
-                                      s=0.1,
-                                      alpha=0.2)
-        self.configure_plot(title)
+        self.x, self.y, self.z, self.p = point_cloud.T
+        vmin = 0 if normalised else min(self.p)
+        vmax = 1 if normalised else max(self.p)
+        self.points = self.ax.scatter(self.x, self.y, self.z, c=self.p,
+                                      cmap='magma',
+                                      s=s,
+                                      alpha=a,
+                                      vmin=vmin, vmax=vmax)
+        self.configure_plot(title, normalised)
+
+    def show(self):
         plt.show()
 
-    def configure_plot(self, title):
-        self.ax.set_aspect('equal')
+    def close(self):
+        plt.close(self.fig)
+
+    def configure_plot(self, title, normalised):
+        self.ax.set_box_aspect(
+            [np.ptp(self.x), np.ptp(self.y), np.ptp(self.z)])
         self.ax.set_title(title)
-        self.ax.set_xlabel('x')
-        self.ax.set_ylabel('y')
-        self.ax.set_zlabel('z')
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
+        c_bar_title = 'Normalised Density' if normalised else 'Density (HU)'
         cbar = self.fig.colorbar(self.points)
-        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_label(c_bar_title)
         cbar.set_alpha(1)
         cbar.draw_all()
 
@@ -255,13 +211,13 @@ class CombinedTibia4DPlot:
         plt.show()
 
     def configure_plot(self):
-        self.ax.set_aspect('equal')
+        self.ax.set_box_aspect([1, 1, 1])
         self.ax.set_title('Tibias Point Cloud')
-        self.ax.set_xlabel('x')
-        self.ax.set_ylabel('y')
-        self.ax.set_zlabel('z')
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
         cbar = self.fig.colorbar(self.points)
-        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_label(f'Density (HU)')
         cbar.set_alpha(1)
         cbar.draw_all()
 
@@ -272,23 +228,23 @@ class Density4DPlot:
                  bone_mesh: msr.BoneMesh,
                  pixel_thres=0,
                  slice_height=1000,
-                 point_size=0.02,
+                 point_size=1.0,
                  lw=0,
                  alpha=0.2,
-                 cmap='turbo'):
+                 cmap='magma'):
         point_cloud = segmenter.segmented_point_clouds[bone_mesh.name]
-        x, y, z, p = point_cloud.T
+        self.x, self.y, self.z, self.p = point_cloud.T
         max_z = bone_mesh.z_bounds[1]
         min_z = max_z - slice_height
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
-        self.points = self.ax.scatter(x[(z > min_z) & (p > pixel_thres)],
-                                      y[(z > min_z) & (
-                                          p > pixel_thres)],
-                                      z[(z > min_z) & (
-                                          p > pixel_thres)],
-                                      c=p[(z > min_z) & (
-                                          p > pixel_thres)],
+        self.points = self.ax.scatter(self.x[(self.z > min_z) & (self.p > pixel_thres)],
+                                      self.y[(self.z > min_z) & (
+                                          self.p > pixel_thres)],
+                                      self.z[(self.z > min_z) & (
+                                          self.p > pixel_thres)],
+                                      c=self.p[(self.z > min_z) & (
+                                          self.p > pixel_thres)],
                                       s=point_size,
                                       alpha=alpha,
                                       cmap=cmap)
@@ -296,13 +252,14 @@ class Density4DPlot:
         plt.show()
 
     def configure_plot(self):
-        self.ax.set_aspect('equal')
+        self.ax.set_box_aspect(
+            [np.ptp(self.x), np.ptp(self.y), np.ptp(self.z)])
         self.ax.set_title('Left Tibia Point Cloud')
-        self.ax.set_xlabel('x')
-        self.ax.set_ylabel('y')
-        self.ax.set_zlabel('z')
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
         cbar = self.fig.colorbar(self.points)
-        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_label(f'Density (HU)')
         cbar.set_alpha(1)
         cbar.draw_all()
 
@@ -315,7 +272,7 @@ class Density4DSliderPlot:
                  slice_height=1000,
                  point_size=20,
                  alpha=0.3,
-                 cmap='turbo'):
+                 cmap='magma'):
         self.x, self.y, self.z, self.p = point_cloud.T
         self.max_z = bone_mesh.z_bounds[1]
         self.min_z = self.max_z - slice_height
@@ -337,13 +294,14 @@ class Density4DSliderPlot:
         plt.show()
 
     def configure_plot(self, ax):
-        ax.set_aspect('equal')
+        self.ax.set_box_aspect(
+            [np.ptp(self.x), np.ptp(self.y), np.ptp(self.z)])
         ax.set_title('Left Tibia Point Cloud')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
+        ax.set_xlabel('$x$')
+        ax.set_ylabel('$y$')
+        ax.set_zlabel('$z$')
         cbar = self.fig.colorbar(self.points)
-        cbar.set_label(f'Pixel Intensities (∝ Density)')
+        cbar.set_label(f'Density (HU)')
         cbar.set_alpha(1)
         cbar.draw_all()
 
@@ -361,7 +319,6 @@ class Density4DSliderPlot:
 
         def update(val):
             min_z = self.max_z - val
-            print(min_z)
             x = self.x[(self.z > min_z) & (self.p > self.init_pixel_thres)]
             y = self.y[(self.z > min_z) & (self.p > self.init_pixel_thres)]
             z = self.z[(self.z > min_z) & (self.p > self.init_pixel_thres)]
@@ -399,59 +356,152 @@ class Density4DSliderPlot:
 
 
 class DensityThresholdPlot:
-    def __init__(self, point_cloud, title='Density Threshold Plot'):
+    def __init__(self, point_cloud, title='Density Threshold Plot', min_value_init=0.5, max_value_init=1):
         self.x = point_cloud[:, 0]
         self.y = point_cloud[:, 1]
         self.z = point_cloud[:, 2]
         self.density = point_cloud[:, 3]
         self.min_density = min(self.density)
         self.max_density = max(self.density)
-        self.min_value_init = self.min_density + self.max_density / 2
+        self.min_value_init = min_value_init
+        self.max_value_init = max_value_init
         self.title = title
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
+        self.slider_ax = plt.axes([0.85, 0.1, 0.01, 0.7])
+        self.slider = RangeSlider(
+            self.slider_ax, "Threshold", self.min_density, self.max_density, [self.min_value_init, self.max_value_init], orientation='vertical')
+        self.mask = (self.density > self.slider.val[0]) & (
+            self.density < self.slider.val[1])
+        self.scatter = self.ax.scatter(self.x[self.mask],
+                                       self.y[self.mask],
+                                       self.z[self.mask],
+                                       c=self.density[self.mask], cmap='magma', s=2, vmin=0, vmax=1)
+        self.cbar_ax = self.fig.add_axes(
+            [0.9, 0.1, 0.01, 0.7], sharey=self.slider_ax)
+        self.cbar = self.fig.colorbar(self.scatter, self.cbar_ax)
+        self.__configure_plot()
 
-    def __configure_plot(self, ax):
-        self.ax.set_xlabel('x')
-        self.ax.set_ylabel('y')
-        self.ax.set_zlabel('z')
-        self.ax.set_aspect('equal')
+    def __configure_plot(self):
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
+        self.ax.set_box_aspect(
+            [np.ptp(self.x), np.ptp(self.y), np.ptp(self.z)])
         self.ax.set_xlim(min(self.x), max(self.x))
         self.ax.set_ylim(min(self.y), max(self.y))
+        self.ax.set_zlim(min(self.z), max(self.z))
         self.ax.set_title(self.title)
+        self.cbar.set_label(f'Normalised Density')
+        self.cbar.set_alpha(1)
+
+    def show(self):
+        def update(val):
+            self.mask = (self.density > self.slider.val[0]) & (
+                self.density < self.slider.val[1])
+            self.ax.clear()
+            self.scatter = self.ax.scatter(self.x[self.mask],
+                                           self.y[self.mask],
+                                           self.z[self.mask],
+                                           c=self.density[self.mask], cmap='magma', s=2, vmin=0, vmax=1)
+            self.__configure_plot()
+            self.fig.canvas.draw_idle()
+        self.slider.on_changed(update)
+        plt.show()
+
+    def close(self):
+        plt.close(self.fig)
+
+
+class PredictedClustersPlot:
+    def __init__(self, X, y_pred, title='Predicted Clusters Plot'):
+        self.X = X
+        self.y_pred = y_pred
+        self.title = title
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.unique_labels = np.unique(self.y_pred)
+        color_map = cm.get_cmap("tab20")
+        colors = [color_map(i / len(self.unique_labels))
+                  for i in range(len(self.unique_labels))]
+        for i, label in enumerate(self.unique_labels):
+            color = 'k' if label == -1 else colors[i]
+            alpha = 0.2 if label == -1 else 1
+            self.ax.scatter(self.X[self.y_pred == label, 0],
+                            self.X[self.y_pred == label, 1],
+                            self.X[self.y_pred == label, 2],
+                            s=2,
+                            alpha=alpha,
+                            color=color,
+                            label=str(label))
+        self.configure_plot()
+
+    def configure_plot(self):
+        self.ax.set_box_aspect(
+            [np.ptp(self.X[:, 0]), np.ptp(self.X[:, 1]), np.ptp(self.X[:, 2])])
+        self.ax.set_title(self.title)
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
+        plt.legend()
+
+    def show(self):
+        plt.show()
+
+    def close(self):
+        plt.close(self.fig)
+
+
+class PointCloudWithPolygonsPlot:
+    def __init__(self, point_cloud, polygon_vertices_array, other_lines=None, title='Point Cloud With Polygons Plot'):
+        self.point_cloud = point_cloud
+        self.polygon_vertices_array = polygon_vertices_array
+        self.title = title
+        self.point_cloud_plot = PointCloudPlot(
+            self.point_cloud, normalised=False, title=self.title, s=1, a=0.5)
+        self.ax = self.point_cloud_plot.ax
+        self.lines = other_lines if other_lines else []
+        self.plot_lines()
+        self.plot_polygons()
+
+    def plot_polygons(self):
+        for vertices in self.polygon_vertices_array:
+            polygon = Poly3DCollection([vertices], alpha=0.2, ec='b')
+            self.ax.add_collection(polygon)
+
+    def plot_lines(self):
+        for line in self.lines:
+            self.ax.plot(line[:, 0], line[:, 1], line[:, 2], lw=3)
+
+    def show(self):
+        plt.show()
+
+    def close(self):
+        plt.close(self.point_cloud_plot.fig)
+
+
+class GiftWrapPlot:
+    def __init__(self, convex_hull, points, title='Gift Wrap Plot'):
+        pts = points[:, :3]
+        point_cloud_plot = PointCloudPlot(points,
+                                          normalised=False,
+                                          title=title)
+        self.fig = point_cloud_plot.fig
+        self.ax = point_cloud_plot.ax
+        for s in convex_hull.simplices:
+            # Here we cycle back to the first coordinate
+            s = np.append(s, s[0])
+            self.ax.plot(pts[s, 0], pts[s, 1], pts[s, 2], "r-")
+
+        self.__configure_plot()
+
+    def __configure_plot(self):
+        self.ax.set_xlabel('X')
+        self.ax.set_ylabel('Y')
+        self.ax.set_zlabel('Z')
 
     def plot(self):
-        s_min = plt.axes([0.25, 0.1, 0.65, 0.03])
-        s_max = plt.axes([0.25, 0.15, 0.65, 0.03])
-
-        self.min_density_slider = Slider(
-            s_min, 'Min Density', self.min_density, self.max_density, valinit=self.min_value_init)
-        self.max_density_slider = Slider(
-            s_max, 'Max Density', self.min_density, self.max_density, valinit=self.max_density)
-        mask = (self.density > self.min_density_slider.val) & (
-            self.density < self.max_density_slider.val)
-        self.ax.scatter(self.x[mask], self.y[mask],
-                        self.z[mask], c=self.density[mask], s=0.3)
-        self.__configure_plot(self.ax)
-
-        def update(val):
-            mask = (self.density > self.min_density_slider.val) & (
-                self.density < self.max_density_slider.val)
-            self.ax.clear()
-            self.ax.scatter(self.x[mask], self.y[mask],
-                            self.z[mask], c=self.density[mask], s=0.3)
-            self.__configure_plot(self.ax)
-            self.fig.canvas.draw_idle()
-
-        self.min_density_slider.on_changed(update)
-        self.max_density_slider.on_changed(update)
-
-        reset_axes = plt.axes([0.8, 0.025, 0.1, 0.04])
-        button = Button(reset_axes, 'Reset', hovercolor='0.975')
-
-        def reset(event):
-            self.min_density_slider.reset()
-            self.max_density_slider.reset()
-
-        button.on_clicked(reset)
         plt.show()
+
+    def close(self):
+        plt.close(self.fig)
