@@ -12,7 +12,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import pickle
 
 
-def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, hull_volume_thresh):
+def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_vol_thresh):
     print(f'Analysing {bone_CT.side} Tibia...')
     medial_points = bone_CT.medial_points_4d
     implant_roi_points = bone_CT.implant_roi_points_4d
@@ -20,33 +20,11 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, hull_volu
         implant_roi_points, bone_CT.side)
     implant_roi_cn_points = bone_points_manipulator.centred_nomalised_points
     points_analyser = msa.PointCloudAnalyser(implant_roi_cn_points)
-    # min_density_thresh = points_analyser.get_n_percentile(
-    #     init_density_thresh_percentile)
-    # # # NOTE: Hardcoded value for now
-    # # min_density_thresh = 0.37
-    # print(f'Minimum Density Threshold: {min_density_thresh}')
-    # thresholded_point_cloud = implant_roi_cn_points[implant_roi_cn_points[:, 3]
-    #                                                 >= min_density_thresh]
-    # points_classifier = msc.PointCloudClassifier(thresholded_point_cloud)
-    # filter_1_labels = points_classifier.filter_1_labels
-    # filter_1_points = points_classifier.X_filtered_1
-    # filter_2_labels = points_classifier.filter_2_labels
-    # filter_2_points = points_classifier.X_filtered_2
-    # convex_hull_2d_vertices_by_z, hull_centres, point_centers = points_classifier.sliced_2d_convex_hull()
-    # convex_hull_3d = points_classifier.convex_hull_3d(filter_2_points)
-    # filter_2_points_uncentered = geom.translate_space_3d(filter_2_points[:, :3],
-    #                                                      bone_points_manipulator.cn_space_bounds,
-    #                                                      bone_points_manipulator.original_space_bounds)
-    # convex_hull_3d_uncentered = points_classifier.convex_hull_3d(
-    #     filter_2_points_uncentered)
-    # hull_analyser = msa.ConvexHullAnalyser(convex_hull_3d_uncentered)
-    # print(f'Filter 2 Convex Hull Volume: {hull_analyser.volume} mm^3')
-
-    hull_volume = 0
+    peg_hull_volume = peg_hull_rel_volume = 0
     density_thresh_percentile = init_density_thresh_percentile
-    while hull_volume < hull_volume_thresh:
+    while peg_hull_rel_volume <= rel_peg_vol_thresh:
         print(
-            f'Minimum Density Threshold Percentile: {density_thresh_percentile}')
+            f'Trying density threshold percentile: {density_thresh_percentile}')
         min_density_thresh = points_analyser.get_n_percentile(
             density_thresh_percentile)
         thresholded_point_cloud = implant_roi_cn_points[implant_roi_cn_points[:, 3]
@@ -56,21 +34,30 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, hull_volu
         filter_1_points = points_classifier.X_filtered_1
         filter_2_labels = points_classifier.filter_2_labels
         filter_2_points = points_classifier.X_filtered_2
+        implant_convex_hull_3d = points_classifier.convex_hull_3d(
+            implant_roi_cn_points)
+        implant_hull_analyser = msa.ConvexHullAnalyser(implant_convex_hull_3d)
+        implant_hull_volume = implant_hull_analyser.volume
         try:
-            convex_hull_2d_vertices_by_z, hull_centres, point_centers = points_classifier.sliced_2d_convex_hull()
-            convex_hull_3d = points_classifier.convex_hull_3d(filter_2_points)
-            filter_2_points_uncentered = geom.translate_space_3d(filter_2_points[:, :3],
-                                                                 bone_points_manipulator.cn_space_bounds,
-                                                                 bone_points_manipulator.original_space_bounds)
-            convex_hull_3d_uncentered = points_classifier.convex_hull_3d(
-                filter_2_points_uncentered)
-            hull_analyser = msa.ConvexHullAnalyser(convex_hull_3d_uncentered)
-            hull_volume = hull_analyser.volume
+            peg_convex_hull_3d = points_classifier.convex_hull_3d(
+                filter_2_points)
+            peg_hull_analyser = msa.ConvexHullAnalyser(peg_convex_hull_3d)
+            peg_hull_volume = peg_hull_analyser.volume
         except:
             pass
+        peg_hull_rel_volume = peg_hull_volume / implant_hull_volume
         density_thresh_percentile -= 1
 
-    print(f'Filter 2 Convex Hull Volume: {hull_volume} mm^3')
+    print(f'Density Threshold Percentile: {density_thresh_percentile}')
+    filter_2_points_uncentered = geom.translate_space_3d(filter_2_points[:, :3],
+                                                         bone_points_manipulator.cn_space_bounds,
+                                                         bone_points_manipulator.original_space_bounds)
+    peg_hull_3d_uncentered = points_classifier.convex_hull_3d(
+        filter_2_points_uncentered)
+    peg_hull_analyser = msa.ConvexHullAnalyser(peg_hull_3d_uncentered)
+    peg_real_hull_volume = peg_hull_analyser.volume
+    print(f'Filter 2 Convex Hull Volume: {peg_real_hull_volume} mm^3')
+    convex_hull_2d_vertices_by_z, hull_centres, point_centers = points_classifier.sliced_2d_convex_hull()
 
     # Plots:
     medial_points_plot = msv.PointCloudPlot(medial_points,
@@ -132,11 +119,11 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, hull_volu
     convex_hull_2d_plot.show()
     convex_hull_2d_plot.close()
 
-    convex_hull_3d_plot = msv.GiftWrapPlot(convex_hull_3d, filter_2_points)
+    convex_hull_3d_plot = msv.GiftWrapPlot(peg_convex_hull_3d, filter_2_points)
     convex_hull_3d_plot.plot()
     convex_hull_3d_plot.close()
     roi_visualiser = msv.RoiVisualiser(bone_mesh.mesh,
-                                       convex_hull_3d_uncentered,
+                                       peg_hull_3d_uncentered,
                                        filter_2_points_uncentered,
                                        title='Approximate Implant Peg Position Uncentered',
                                        bone_label=bone_mesh.name,
@@ -161,7 +148,7 @@ def per_bone_analysis(body_CT, bone_mesh):
         tibia_analysis(bone_mesh,
                        bone_CT,
                        init_density_thresh_percentile=99,
-                       hull_volume_thresh=1000)
+                       rel_peg_vol_thresh=1/15)
 
 
 def pre_analysis_plots(body_CT, bone_meshes):
