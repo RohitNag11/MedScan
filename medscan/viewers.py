@@ -131,7 +131,8 @@ class SegmentedImagesSliderPlot:
 class Bone3DPlot:
     def __init__(self,
                  bone_meshes: list[msr.BoneMesh],
-                 colors: list[str]):
+                 colors: list[str],
+                 title: str = '3D Bone Meshes'):
         # meshes = [bone_mesh.mesh for bone_mesh in bone_meshes]
         self.fig = plt.figure()
         ax = self.fig.add_subplot(111, projection='3d')
@@ -152,6 +153,7 @@ class Bone3DPlot:
         ax.set_xlabel('$x$')
         ax.set_ylabel('$y$')
         ax.set_zlabel('$z$')
+        ax.set_title(title)
         ax.legend()
 
     def show(self):
@@ -501,6 +503,60 @@ class GiftWrapPlot:
         self.ax.set_zlabel('Z')
 
     def plot(self):
+        plt.show()
+
+    def close(self):
+        plt.close(self.fig)
+
+
+class RoiVisualiser:
+    def __init__(self, bone_mesh_mesh, roi_convex_hull, roi_convex_hull_points, title='ROI Visualiser', bone_label='Bone', roi_label='ROI'):
+        # meshes = [bone_mesh.mesh for bone_mesh in bone_meshes]
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.title = title
+        self.fg_color = 'white'
+        self.bg_color = 'black'
+        self.bone_vertices = bone_mesh_mesh.vertices
+        trisurf = self.ax.plot_trisurf(self.bone_vertices[:, 0],
+                                       self.bone_vertices[:, 1],
+                                       triangles=bone_mesh_mesh.faces,
+                                       Z=self.bone_vertices[:, 2],
+                                       ec='#867FEA7B',
+                                       lw=0.1,
+                                       color=f'#231C833C',
+                                       label=bone_label)
+        trisurf._edgecolors2d = trisurf._edgecolor3d
+        trisurf._facecolors2d = trisurf._facecolor3d
+        c_h_pts = roi_convex_hull_points[:, :3]
+        for s in roi_convex_hull.simplices:
+            # Here we cycle back to the first coordinate
+            s = np.append(s, s[0])
+            self.ax.plot(c_h_pts[s, 0], c_h_pts[s, 1],
+                         c_h_pts[s, 2], c="r")
+        # self.scale = bone_mesh.mesh.vertices.flatten()
+        self.__config_plot()
+
+    def __config_plot(self):
+        self.fig.set_facecolor(self.bg_color)
+        self.ax.set_facecolor(self.bg_color)
+        self.ax.grid(False)
+        # self.ax.w_xaxis.pane.fill = False
+        # self.ax.w_yaxis.pane.fill = False
+        # self.ax.w_zaxis.pane.fill = False
+        self.ax.w_xaxis.set_pane_color((0.0, 0.0, 0.0, 0.0))
+        self.ax.w_yaxis.set_pane_color((0.0, 0.0, 0.0, 0.0))
+        self.ax.w_zaxis.set_pane_color((0.0, 0.0, 0.0, 0.0))
+        # self.ax.auto_scale_xyz(self.scale, self.scale, self.scale)
+        self.ax.set_box_aspect(
+            [np.ptp(self.bone_vertices[:, 0]), np.ptp(self.bone_vertices[:, 1]), np.ptp(self.bone_vertices[:, 2])])
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
+        self.ax.set_title(self.title, color=self.fg_color)
+        self.ax.legend(loc='lower right')
+
+    def show(self):
         plt.show()
 
     def close(self):

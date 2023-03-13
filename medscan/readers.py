@@ -43,6 +43,13 @@ class BoneMesh:
         z_lt_section_points = self.get_z_section_points(z)
         return Polygon(z_lt_section_points, label=label, ec=ec, fc=ec+'40', lw=2)
 
+    def translate_space(self, old_space_bounds, new_space_bounds):
+        new_mesh = self.mesh.copy()
+        dx, dy, dz = geom.translate_space_3d(
+            np.array([0, 0, 0]), old_space_bounds, new_space_bounds)
+        new_mesh.apply_translation((dx, dy, dz))
+        return new_mesh
+
 
 class DicomCT:
     def __init__(self, dicomdir_path: str):

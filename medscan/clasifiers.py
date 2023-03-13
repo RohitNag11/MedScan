@@ -8,6 +8,7 @@ from scipy.optimize import minimize
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 import trimesh
+from .helpers import geometry as geom
 
 
 class PointCloudClassifier:
@@ -17,7 +18,7 @@ class PointCloudClassifier:
         self.X_filtered_1, self.filter_1_labels = self.__birch_filter(
             self.X_pre_filter)
         self.X_filtered_2, self.filter_2_labels = self.__dbscan_filter(
-            self.X_filtered_1, 1, 7)
+            self.X_filtered_1, eps_fraction=0.2, min_samples=7)
 
     def __model_predict(self, points, model):
         '''Fits the model to the data and returns the predicted classes for the points in the point cloud.'''
@@ -37,27 +38,18 @@ class PointCloudClassifier:
         '''Returns the points in the point cloud that belong to the specified class.'''
         birch_model = Birch(threshold=threshold, n_clusters=n_clusters)
         y_pred = self.__model_predict(points, birch_model)
-        return points[y_pred == 0], y_pred
+        mean_y_pos_per_cluster = [
+            np.mean(points[y_pred == i, 1]) for i in range(n_clusters)]
+        return points[y_pred == np.argmin(mean_y_pos_per_cluster)], y_pred
 
-    def __dbscan_filter(self, point_cloud, eps=0.01, min_samples=2):
+    def __dbscan_filter(self, point_cloud, eps_fraction=0.2, min_samples=2):
         '''Returns the points in the point cloud that belong to the specified class.'''
         points = point_cloud[:, :3]
+        eps = points[:, 1].std() * eps_fraction
         db_model = DBSCAN(eps=eps, min_samples=min_samples).fit(points)
         labels = db_model.labels_
         sorted_labels = self.__sort_labels(labels)
         return point_cloud[sorted_labels == 0], sorted_labels
-
-    def __closeness_filter(self, points, threshold=0.01):
-        '''Returns the points in the point cloud that are close to each other.'''
-        distances = np.sum((points[:, np.newaxis, :] - points)**2, axis=-1)
-        # set the diagonal to infinity to ignore the distance from a point to itself
-        np.fill_diagonal(distances, np.inf)
-        # find the indices of the closest points for each point
-        closest_indices = np.argmin(distances, axis=1)
-        # find the indices of the points that are close to another point
-        mask = np.min(distances, axis=1) < threshold
-        # return the filtered point cloud
-        return points[mask]
 
     def cluster_points(self, point_cloud, threshold):
         # calculate pairwise distances between all points in the point cloud
@@ -139,8 +131,8 @@ class PointCloudClassifier:
         # Return the point clouds as a list of NumPy arrays
         return point_clouds
 
-    def convex_hull_3d(self):
+    def convex_hull_3d(self, point_cloud):
         """Compute the convex hull of a 3D point cloud using the gift wrapping algorithm"""
-        points = self.X_filtered_2[:, :3]
+        points = point_cloud[:, :3]
         hull = ConvexHull(points)
         return hull
