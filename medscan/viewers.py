@@ -7,6 +7,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import Slider, Button, RadioButtons, RangeSlider
 import numpy as np
+import trimesh
 
 
 class SegmentedRegionSliderPlot:
@@ -483,24 +484,34 @@ class PointCloudWithPolygonsPlot:
 
 
 class GiftWrapPlot:
-    def __init__(self, convex_hull, points, title='Gift Wrap Plot'):
-        pts = points[:, :3]
+    def __init__(self, convex_hull_mesh, points, title='Gift Wrap Plot', c='#FF0000'):
+        self.convex_hull_mesh = convex_hull_mesh
+        self.title = title
         point_cloud_plot = PointCloudPlot(points,
                                           normalised=False,
                                           title=title)
         self.fig = point_cloud_plot.fig
         self.ax = point_cloud_plot.ax
-        for s in convex_hull.simplices:
-            # Here we cycle back to the first coordinate
-            s = np.append(s, s[0])
-            self.ax.plot(pts[s, 0], pts[s, 1], pts[s, 2], "r-")
-
+        self.ax.plot_trisurf(self.convex_hull_mesh.vertices[:, 0],
+                             self.convex_hull_mesh.vertices[:, 1],
+                             self.convex_hull_mesh.vertices[:, 2],
+                             triangles=self.convex_hull_mesh.faces,
+                             ec=f'{c}50',
+                             color=f'{c}',
+                             alpha=0.2,
+                             lw=0.5,
+                             antialiased=True)
         self.__configure_plot()
 
     def __configure_plot(self):
-        self.ax.set_xlabel('X')
-        self.ax.set_ylabel('Y')
-        self.ax.set_zlabel('Z')
+        self.ax.set_box_aspect(
+            [np.ptp(self.convex_hull_mesh.vertices[:, 0]),
+             np.ptp(self.convex_hull_mesh.vertices[:, 1]),
+             np.ptp(self.convex_hull_mesh.vertices[:, 2])])
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
+        self.ax.set_title(self.title)
 
     def plot(self):
         plt.show()
@@ -510,7 +521,7 @@ class GiftWrapPlot:
 
 
 class RoiVisualiser:
-    def __init__(self, bone_mesh_mesh, roi_convex_hull, roi_convex_hull_points, title='ROI Visualiser', bone_label='Bone', roi_label='ROI'):
+    def __init__(self, bone_mesh_mesh, roi_convex_hull_mesh, title='ROI Visualiser', bone_label='Bone', roi_label='ROI'):
         # meshes = [bone_mesh.mesh for bone_mesh in bone_meshes]
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -518,23 +529,27 @@ class RoiVisualiser:
         self.fg_color = 'white'
         self.bg_color = 'black'
         self.bone_vertices = bone_mesh_mesh.vertices
-        trisurf = self.ax.plot_trisurf(self.bone_vertices[:, 0],
-                                       self.bone_vertices[:, 1],
-                                       triangles=bone_mesh_mesh.faces,
-                                       Z=self.bone_vertices[:, 2],
-                                       ec='#867FEA7B',
-                                       lw=0.1,
-                                       color=f'#231C833C',
-                                       label=bone_label)
-        trisurf._edgecolors2d = trisurf._edgecolor3d
-        trisurf._facecolors2d = trisurf._facecolor3d
-        c_h_pts = roi_convex_hull_points[:, :3]
-        for s in roi_convex_hull.simplices:
-            # Here we cycle back to the first coordinate
-            s = np.append(s, s[0])
-            self.ax.plot(c_h_pts[s, 0], c_h_pts[s, 1],
-                         c_h_pts[s, 2], c="r")
-        # self.scale = bone_mesh.mesh.vertices.flatten()
+        bone_trisurf = self.ax.plot_trisurf(self.bone_vertices[:, 0],
+                                            self.bone_vertices[:, 1],
+                                            triangles=bone_mesh_mesh.faces,
+                                            Z=self.bone_vertices[:, 2],
+                                            ec='#867FEA7B',
+                                            lw=0.1,
+                                            color=f'#231C833C',
+                                            label=bone_label)
+        peg_trisurf = self.ax.plot_trisurf(roi_convex_hull_mesh.vertices[:, 0],
+                                           roi_convex_hull_mesh.vertices[:, 1],
+                                           roi_convex_hull_mesh.vertices[:, 2],
+                                           triangles=roi_convex_hull_mesh.faces,
+                                           ec='#FF0000',
+                                           lw=0.1,
+                                           color='#FF0000',
+                                           alpha=1,
+                                           label=roi_label)
+        bone_trisurf._edgecolors2d = bone_trisurf._edgecolor3d
+        bone_trisurf._facecolors2d = bone_trisurf._facecolor3d
+        peg_trisurf._edgecolors2d = peg_trisurf._edgecolor3d
+        peg_trisurf._facecolors2d = peg_trisurf._facecolor3d
         self.__config_plot()
 
     def __config_plot(self):
@@ -555,6 +570,54 @@ class RoiVisualiser:
         self.ax.set_zlabel('$z$')
         self.ax.set_title(self.title, color=self.fg_color)
         self.ax.legend(loc='lower right')
+
+    def show(self):
+        plt.show()
+
+    def close(self):
+        plt.close(self.fig)
+
+
+class TriMeshPlot:
+    def __init__(self, tri_mesh, title='Tri Mesh Plot'):
+        self.is_list_input = False if isinstance(
+            tri_mesh, trimesh.base.Trimesh) else True
+        self.tri_mesh = tri_mesh if not self.is_list_input else None
+        self.tri_meshes = tri_mesh if self.is_list_input else None
+        self.title = title
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.__plot_mesh()
+        self.__configure_plot()
+
+    def __plot_mesh(self):
+        if not self.is_list_input:
+            self.ax.plot_trisurf(self.tri_mesh.vertices[:, 0],
+                                 self.tri_mesh.vertices[:, 1],
+                                 self.tri_mesh.vertices[:, 2],
+                                 triangles=self.tri_mesh.faces,
+                                 alpha=0.3,
+                                 lw=1)
+        else:
+            for tri_mesh in self.tri_meshes:
+                self.ax.plot_trisurf(tri_mesh.vertices[:, 0],
+                                     tri_mesh.vertices[:, 1],
+                                     tri_mesh.vertices[:, 2],
+                                     triangles=tri_mesh.faces,
+                                     alpha=0.3,
+                                     lw=1)
+
+    def __configure_plot(self):
+        vertices = self.tri_mesh.vertices if not self.is_list_input else self.tri_meshes[
+            0].vertices
+        self.ax.set_box_aspect(
+            [np.ptp(vertices[:, 0]),
+             np.ptp(vertices[:, 1]),
+             np.ptp(vertices[:, 2])])
+        self.ax.set_xlabel('$x$')
+        self.ax.set_ylabel('$y$')
+        self.ax.set_zlabel('$z$')
+        self.ax.set_title(self.title)
 
     def show(self):
         plt.show()

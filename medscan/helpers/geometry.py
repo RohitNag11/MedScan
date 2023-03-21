@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+import trimesh
+from scipy.spatial.transform import Rotation as R
 
 
 def cartesian_2d_to_pixel_space(cartesian_points, x_bounds, y_bounds, ni, nj):
@@ -42,7 +44,7 @@ def translate_space_1d(cur_space_bounds, new_space_bounds, points):
 
 
 def translate_space_3d(point_cloud, cur_space_bounds_3d, new_space_bounds_3d):
-    '''Arguments: 
+    '''Arguments:
     point_cloud: a 2d array of points in 3d space
     cur_space_bounds_3d: a 2d array of the bounds of the current space in the form [[x0, x1], [y0, y1], [z0, z1]]
     new_space_bounds_3d: a 2d array of the bounds of the new space in the form [[x0, x1], [y0, y1], [z0, z1]]
@@ -59,3 +61,69 @@ def translate_space_3d(point_cloud, cur_space_bounds_3d, new_space_bounds_3d):
         point_cloud * np.array([kx, ky, kz])) + np.array([dx, dy, dz])
 
     return transformed_point_cloud
+
+
+def split_point_cloud_by_z(point_cloud):
+    points_xyz = point_cloud[:, :3]
+    # Sort the point cloud by z value
+    sorted_cloud = points_xyz[points_xyz[:, 2].argsort()]
+    # Find the indices where the z value changes
+    indices = np.where(np.diff(sorted_cloud[:, 2]) != 0)[0] + 1
+    # Split the point cloud into separate arrays based on the indices
+    point_cloud = np.split(sorted_cloud, indices)
+    # Return the point clouds as a list of NumPy arrays
+    return point_cloud
+
+
+def convex_hull_to_trimesh(convex_hull):
+    """
+    Convert a `scipy.spatial._qhull.ConvexHull` object to a `trimesh` object.
+
+    Parameters:
+    -----------
+    convex_hull : scipy.spatial._qhull.ConvexHull
+        The convex hull to convert.
+
+    Returns:
+    --------
+    trimesh : trimesh.Trimesh
+        The resulting trimesh object.
+    """
+    vertices = convex_hull.points
+    faces = convex_hull.simplices
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+    return mesh
+
+
+def create_cylinder_from_trimesh(mesh):
+    # # get the minimum and maximum coordinates of the vertices in the trimesh
+    # min_coords = np.min(mesh.vertices, axis=0)
+    # max_coords = np.max(mesh.vertices, axis=0)
+
+    # # calculate the height of the cylinder
+    # height = max_coords[2] - min_coords[2]
+
+    # # calculate the centroid of the trimesh
+    # centroid = np.mean(mesh.vertices, axis=0)
+
+    # # calculate the radius of the cylinder
+    # radius = np.max(np.linalg.norm(
+    #     mesh.vertices[:, :2] - centroid[:2], axis=1))
+
+    # # create the cylinder
+    # cylinder = trimesh.creation.cylinder(radius=radius, height=height)
+    cylinder = trimesh.creation.cylinder(radius=1, height=1)
+
+    # calculate the transformation to map the bounding box of the original mesh to the bounding box of the cylinder
+    mesh_min = np.min(mesh.bounding_box.vertices, axis=0)
+    mesh_max = np.max(mesh.bounding_box.vertices, axis=0)
+    cylinder_min = np.min(cylinder.bounding_box.vertices, axis=0)
+    cylinder_max = np.max(cylinder.bounding_box.vertices, axis=0)
+    scale = (mesh_max - mesh_min) / (cylinder_max - cylinder_min)
+    translation = mesh_min - cylinder_min * scale
+    T = trimesh.transformations.scale_and_translate(scale, translation)
+
+    # apply the transformation to the cylinder mesh
+    cylinder.apply_transform(T)
+
+    return cylinder

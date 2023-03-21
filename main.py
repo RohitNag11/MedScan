@@ -14,14 +14,19 @@ import pickle
 
 def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_vol_thresh):
     print(f'Analysing {bone_CT.side} Tibia...')
+    # Get the medial point cloud of the bone's ct data (used for plotting)
     medial_points = bone_CT.medial_points_4d
+    # Get the implant roi point cloud of the bone's ct data (used for analysis)
     implant_roi_points = bone_CT.implant_roi_points_4d
+    # Create a point cloud manipulator for the implant roi point cloud
     bone_points_manipulator = msm.PointCloudManipulator(
         implant_roi_points, bone_CT.side)
+    # Center and normalise the implant roi point cloud
     implant_roi_cn_points = bone_points_manipulator.centred_nomalised_points
     points_analyser = msa.PointCloudAnalyser(implant_roi_cn_points)
     peg_hull_volume = peg_hull_rel_volume = 0
     density_thresh_percentile = init_density_thresh_percentile
+    implant_hull_volume = msa.ConvexHullAnalyser(implant_roi_cn_points).volume
     while peg_hull_rel_volume <= rel_peg_vol_thresh:
         print(
             f'Trying density threshold percentile: {density_thresh_percentile}')
@@ -34,30 +39,28 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_v
         filter_1_points = points_classifier.X_filtered_1
         filter_2_labels = points_classifier.filter_2_labels
         filter_2_points = points_classifier.X_filtered_2
-        implant_convex_hull_3d = points_classifier.convex_hull_3d(
-            implant_roi_cn_points)
-        implant_hull_analyser = msa.ConvexHullAnalyser(implant_convex_hull_3d)
-        implant_hull_volume = implant_hull_analyser.volume
         try:
-            peg_convex_hull_3d = points_classifier.convex_hull_3d(
-                filter_2_points)
-            peg_hull_analyser = msa.ConvexHullAnalyser(peg_convex_hull_3d)
-            peg_hull_volume = peg_hull_analyser.volume
+            peg_cn_hull_analyser = msa.ConvexHullAnalyser(filter_2_points)
+            peg_hull_volume = peg_cn_hull_analyser.volume
         except:
             pass
         peg_hull_rel_volume = peg_hull_volume / implant_hull_volume
         density_thresh_percentile -= 1
-
     print(f'Density Threshold Percentile: {density_thresh_percentile}')
+    convex_hull_2d_vertices_by_z, hull_centres, point_centers = peg_cn_hull_analyser.sliced_convex_hull_2d()
+    peg_cn_hull_mesh = geom.convex_hull_to_trimesh(
+        peg_cn_hull_analyser.convex_hull_3d)
     filter_2_points_uncentered = geom.translate_space_3d(filter_2_points[:, :3],
                                                          bone_points_manipulator.cn_space_bounds,
                                                          bone_points_manipulator.original_space_bounds)
-    peg_hull_3d_uncentered = points_classifier.convex_hull_3d(
+    peg_un_cn_hull_analyser = msa.ConvexHullAnalyser(
         filter_2_points_uncentered)
-    peg_hull_analyser = msa.ConvexHullAnalyser(peg_hull_3d_uncentered)
-    peg_real_hull_volume = peg_hull_analyser.volume
-    print(f'Filter 2 Convex Hull Volume: {peg_real_hull_volume} mm^3')
-    convex_hull_2d_vertices_by_z, hull_centres, point_centers = points_classifier.sliced_2d_convex_hull()
+    peg_un_cn_hull = peg_un_cn_hull_analyser.convex_hull_3d
+    peg_un_cn_hull_volume = peg_un_cn_hull_analyser.volume
+    peg_un_cn_hull_mesh = geom.convex_hull_to_trimesh(peg_un_cn_hull)
+    peg_un_cn_cylinder_mesh = geom.create_cylinder_from_trimesh(
+        peg_un_cn_hull_mesh)
+    print(f'Filter 2 Convex Hull Volume: {peg_un_cn_hull_volume} mm^3')
 
     # Plots:
     medial_points_plot = msv.PointCloudPlot(medial_points,
@@ -96,7 +99,7 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_v
 
     filter_1_plot = msv.PointCloudPlot(filter_1_points,
                                        normalised=True,
-                                       title=f'{bone_mesh.name} - Filter 1 (Birch)')
+                                       title=f'{bone_mesh.name} Peg ROI - Filter 1 (Birch)')
     filter_1_plot.show()
     filter_1_plot.close()
 
@@ -107,7 +110,7 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_v
 
     filter_2_plot = msv.PointCloudPlot(filter_2_points,
                                        normalised=True,
-                                       title=f'{bone_mesh.name} - Filter 2 (DBSCAN)')
+                                       title=f'{bone_mesh.name} Peg ROI - Filter 2 (DBSCAN)')
     filter_2_plot.show()
     filter_2_plot.close()
 
@@ -115,21 +118,35 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_v
                                                          convex_hull_2d_vertices_by_z,
                                                          other_lines=[
                                                              hull_centres, point_centers],
-                                                         title=f'{bone_mesh.name} - Filter 2 (DBSCAN) with Convex Hull')
+                                                         title=f'{bone_mesh.name} Peg ROI - 2D Sliced Convex Hull')
     convex_hull_2d_plot.show()
     convex_hull_2d_plot.close()
 
-    convex_hull_3d_plot = msv.GiftWrapPlot(peg_convex_hull_3d, filter_2_points)
+    convex_hull_3d_plot = msv.GiftWrapPlot(
+        peg_cn_hull_mesh, filter_2_points)
     convex_hull_3d_plot.plot()
     convex_hull_3d_plot.close()
+
+    overlay_mesh_plot = msv.TriMeshPlot(
+        [peg_un_cn_cylinder_mesh, peg_un_cn_hull_mesh], title=f'{bone_mesh.name} Peg ROI - Comparison of Convex Hull and Cylinder Fit')
+    overlay_mesh_plot.show()
+    overlay_mesh_plot.close()
+
     roi_visualiser = msv.RoiVisualiser(bone_mesh.mesh,
-                                       peg_hull_3d_uncentered,
-                                       filter_2_points_uncentered,
-                                       title='Approximate Implant Peg Position Uncentered',
+                                       peg_un_cn_hull_mesh,
+                                       title='Approximate Implant Peg ROI Uncentered',
                                        bone_label=bone_mesh.name,
-                                       roi_label='`Pegs ROI')
+                                       roi_label='Pegs ROI')
     roi_visualiser.show()
     roi_visualiser.close()
+
+    roi_visualiser_cylinder = msv.RoiVisualiser(bone_mesh.mesh,
+                                                peg_un_cn_cylinder_mesh,
+                                                title='Approximate Implant Peg ROI Cylinder Fit Uncentered',
+                                                bone_label=bone_mesh.name,
+                                                roi_label='Pegs ROI Cylinder Fit')
+    roi_visualiser_cylinder.show()
+    roi_visualiser_cylinder.close()
 
 
 def per_bone_analysis(body_CT, bone_mesh):
@@ -196,5 +213,10 @@ def main(patient_id):
 
 
 if __name__ == '__main__':
-    patient_id = 'MJM07_MJM08'
+    patient_id = 'MJM03_MJM04'
     main(patient_id)
+
+    # TO do:
+    # find bounding box
+    # Find average density of bounding box
+    # angles -30-60 degrees in y-z plane.
