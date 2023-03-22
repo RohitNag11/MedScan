@@ -579,12 +579,13 @@ class RoiVisualiser:
 
 
 class TriMeshPlot:
-    def __init__(self, tri_mesh, title='Tri Mesh Plot'):
+    def __init__(self, tri_mesh, title='Tri Mesh Plot', alpha=0.3):
         self.is_list_input = False if isinstance(
             tri_mesh, trimesh.base.Trimesh) else True
         self.tri_mesh = tri_mesh if not self.is_list_input else None
         self.tri_meshes = tri_mesh if self.is_list_input else None
         self.title = title
+        self.alpha = alpha
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
         self.__plot_mesh()
@@ -596,7 +597,7 @@ class TriMeshPlot:
                                  self.tri_mesh.vertices[:, 1],
                                  self.tri_mesh.vertices[:, 2],
                                  triangles=self.tri_mesh.faces,
-                                 alpha=0.3,
+                                 alpha=self.alpha,
                                  lw=1)
         else:
             for tri_mesh in self.tri_meshes:
@@ -604,7 +605,7 @@ class TriMeshPlot:
                                      tri_mesh.vertices[:, 1],
                                      tri_mesh.vertices[:, 2],
                                      triangles=tri_mesh.faces,
-                                     alpha=0.3,
+                                     alpha=self.alpha,
                                      lw=1)
 
     def __configure_plot(self):

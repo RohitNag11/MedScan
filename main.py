@@ -12,22 +12,14 @@ from mpl_toolkits.mplot3d import Axes3D
 import pickle
 
 
-def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_vol_thresh):
-    print(f'Analysing {bone_CT.side} Tibia...')
-    # Get the medial point cloud of the bone's ct data (used for plotting)
-    medial_points = bone_CT.medial_points_4d
-    # Get the implant roi point cloud of the bone's ct data (used for analysis)
-    implant_roi_points = bone_CT.implant_roi_points_4d
-    # Create a point cloud manipulator for the implant roi point cloud
-    bone_points_manipulator = msm.PointCloudManipulator(
-        implant_roi_points, bone_CT.side)
-    # Center and normalise the implant roi point cloud
-    implant_roi_cn_points = bone_points_manipulator.centred_nomalised_points
+def filter_points_by_desired_peg_roi_vol(implant_roi_cn_points,
+                                         init_density_percentile_thresh,
+                                         desired_peg_vol_ratio):
+    density_thresh_percentile = init_density_percentile_thresh
     points_analyser = msa.PointCloudAnalyser(implant_roi_cn_points)
     peg_hull_volume = peg_hull_rel_volume = 0
-    density_thresh_percentile = init_density_thresh_percentile
     implant_hull_volume = msa.ConvexHullAnalyser(implant_roi_cn_points).volume
-    while peg_hull_rel_volume <= rel_peg_vol_thresh:
+    while peg_hull_rel_volume <= desired_peg_vol_ratio:
         print(
             f'Trying density threshold percentile: {density_thresh_percentile}')
         min_density_thresh = points_analyser.get_n_percentile(
@@ -46,7 +38,24 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_thresh_percentile, rel_peg_v
             pass
         peg_hull_rel_volume = peg_hull_volume / implant_hull_volume
         density_thresh_percentile -= 1
-    print(f'Density Threshold Percentile: {density_thresh_percentile}')
+    return filter_1_points, filter_1_labels, filter_2_points, filter_2_labels, min_density_thresh, thresholded_point_cloud
+
+
+def tibia_analysis(bone_mesh, bone_CT, init_density_percentile_thresh, desired_peg_vol_ratio):
+    print(f'Analysing {bone_CT.side} Tibia...')
+    # Get the medial point cloud of the bone's ct data (used for plotting)
+    medial_points = bone_CT.medial_points_4d
+    # Get the implant roi point cloud of the bone's ct data (used for analysis)
+    implant_roi_points = bone_CT.implant_roi_points_4d
+    # Create a point cloud manipulator for the implant roi point cloud
+    bone_points_manipulator = msm.PointCloudManipulator(
+        implant_roi_points, bone_CT.side)
+    # Center and normalise the implant roi point cloud
+    implant_roi_cn_points = bone_points_manipulator.centred_nomalised_points
+    filter_1_points, filter_1_labels, filter_2_points, filter_2_labels, min_density_thresh, thresholded_point_cloud = filter_points_by_desired_peg_roi_vol(implant_roi_cn_points,
+                                                                                                                                                           init_density_percentile_thresh,
+                                                                                                                                                           desired_peg_vol_ratio)
+    peg_cn_hull_analyser = msa.ConvexHullAnalyser(filter_2_points)
     convex_hull_2d_vertices_by_z, hull_centres, point_centers = peg_cn_hull_analyser.sliced_convex_hull_2d()
     peg_cn_hull_mesh = geom.convex_hull_to_trimesh(
         peg_cn_hull_analyser.convex_hull_3d)
@@ -164,8 +173,8 @@ def per_bone_analysis(body_CT, bone_mesh):
     if bone_mesh.name.split()[-1].lower() == 'tibia':
         tibia_analysis(bone_mesh,
                        bone_CT,
-                       init_density_thresh_percentile=99,
-                       rel_peg_vol_thresh=1/15)
+                       init_density_percentile_thresh=99,
+                       desired_peg_vol_ratio=1/15)
 
 
 def pre_analysis_plots(body_CT, bone_meshes):

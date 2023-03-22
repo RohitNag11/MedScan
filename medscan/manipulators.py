@@ -73,7 +73,7 @@ class PointCloudManipulator:
         point_cloud_xyz = point_cloud_xyz - center
 
         # Scale the point cloud to be within a bounding cube of dimension 1
-        max_range = np.max(np.abs(point_cloud_xyz))
+        max_range = np.max(np.abs(point_cloud_xyz[:, 2]))
         scale_factor = 0.5 / max_range
         point_cloud_xyz = point_cloud_xyz * scale_factor
 
@@ -83,8 +83,10 @@ class PointCloudManipulator:
         # Concatenate the normalized xyz coordinates with the unchanged 4th dimension
         point_cloud_norm = np.concatenate(
             [point_cloud_xyz, point_cloud[:, 3:]], axis=1)
-
         return point_cloud_norm
+        # point_cloud_norm = np.concatenate(
+        #     [point_cloud_xyz, point_cloud[:, 3:]], axis=1)
+        # return point_cloud_norm
 
     def __get_dim_un_normalised_point_cloud(self, point_cloud_norm, side):
         """
