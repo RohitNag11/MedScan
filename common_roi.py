@@ -24,8 +24,8 @@ def get_patient_ids(id_range: tuple):
 
 def get_readers(dicom_path, lt_path, rt_path):
     body_CT = msr.DicomCT(dicom_path)
-    lt_bone_mesh = msr.BoneMesh(lt_path, 'Left Tibia')
-    rt_bone_mesh = msr.BoneMesh(rt_path, 'Right Tibia')
+    lt_bone_mesh = msr.BoneMesh('Left Tibia', lt_path)
+    rt_bone_mesh = msr.BoneMesh('Right Tibia', rt_path)
     bone_meshes = [lt_bone_mesh, rt_bone_mesh]
     return body_CT, bone_meshes
 
@@ -92,7 +92,7 @@ def per_bone_analysis(body_CT, bone_mesh):
     bone_roi_hull_meshes = []
     bone_cylinder_meshes = []
     # if the bone is a tibia:
-    if bone_mesh.name.split()[-1].lower() == 'tibia':
+    if bone_mesh.is_tibia:
         roi_hull_mesh, roi_cylinder_mesh = tibia_analysis(bone_CT,
                                                           init_density_percentile_thresh=99,
                                                           desired_peg_vol_ratio=1/15)
@@ -140,10 +140,3 @@ if __name__ == '__main__':
     print(trimesh.interfaces.blender.exists)
     patient_ids = get_patient_ids((3, 9))
     main(patient_ids)
-
-
-'''
-TODO:
-- get common zone between all meshes 
-- add progress bars
-'''

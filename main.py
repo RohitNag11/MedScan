@@ -132,7 +132,8 @@ def tibia_analysis(bone_mesh, bone_CT, init_density_percentile_thresh, desired_p
     convex_hull_2d_plot.close()
 
     convex_hull_3d_plot = msv.GiftWrapPlot(
-        peg_cn_hull_mesh, filter_2_points)
+        peg_cn_hull_mesh,
+        filter_2_points)
     convex_hull_3d_plot.plot()
     convex_hull_3d_plot.close()
 
@@ -166,11 +167,12 @@ def per_bone_analysis(body_CT, bone_mesh):
     bone_plot = msv.PointCloudPlot(bone_CT.all_points_4d,
                                    normalised=False,
                                    title=f'{bone_mesh.name} All Points',
-                                   s=0.2,
-                                   a=0.05)
+                                   s=0.5,
+                                   a=0.02,
+                                   showOnlyGraphics=True)
     bone_plot.show()
     # if the bone is a tibia:
-    if bone_mesh.name.split()[-1].lower() == 'tibia':
+    if bone_mesh.is_tibia:
         tibia_analysis(bone_mesh,
                        bone_CT,
                        init_density_percentile_thresh=99,
@@ -197,8 +199,8 @@ def pre_analysis_plots(body_CT, bone_meshes):
 
 def get_readers(dicom_path, lt_path, rt_path):
     body_CT = msr.DicomCT(dicom_path)
-    lt_bone_mesh = msr.BoneMesh(lt_path, 'Left Tibia')
-    rt_bone_mesh = msr.BoneMesh(rt_path, 'Right Tibia')
+    lt_bone_mesh = msr.BoneMesh('Left Tibia', lt_path)
+    rt_bone_mesh = msr.BoneMesh('Right Tibia', rt_path)
     bone_meshes = [lt_bone_mesh, rt_bone_mesh]
     return body_CT, bone_meshes
 

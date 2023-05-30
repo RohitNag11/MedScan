@@ -127,3 +127,10 @@ def create_cylinder_from_trimesh(mesh):
     cylinder.apply_transform(T)
 
     return cylinder
+
+
+def map_to_range(x, old_range, new_range):
+    '''Maps a value from one range to another'''
+    old_min, old_max = old_range
+    new_min, new_max = new_range
+    return (x - old_min) * (new_max - new_min) / (old_max - old_min) + new_min

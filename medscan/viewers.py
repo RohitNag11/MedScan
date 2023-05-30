@@ -165,7 +165,7 @@ class Bone3DPlot:
 
 
 class PointCloudPlot:
-    def __init__(self, point_cloud, normalised=False, title='Point Cloud', s=2, a=1):
+    def __init__(self, point_cloud, normalised=False, title='Point Cloud', s=2.0, a=1.0, showOnlyGraphics=False):
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
         self.x, self.y, self.z, self.p = point_cloud.T
@@ -176,6 +176,7 @@ class PointCloudPlot:
                                       s=s,
                                       alpha=a,
                                       vmin=vmin, vmax=vmax)
+        self.showOnlyGraphics = showOnlyGraphics
         self.configure_plot(title, normalised)
 
     def show(self):
@@ -191,11 +192,15 @@ class PointCloudPlot:
         self.ax.set_xlabel('$x$')
         self.ax.set_ylabel('$y$')
         self.ax.set_zlabel('$z$')
-        c_bar_title = 'Normalised Density' if normalised else 'Density (HU)'
-        cbar = self.fig.colorbar(self.points)
-        cbar.set_label(c_bar_title)
-        cbar.set_alpha(1)
-        cbar.draw_all()
+        if self.showOnlyGraphics:
+            plt.grid(False)
+            plt.axis('off')
+        else:
+            c_bar_title = 'Normalised Density' if normalised else 'Density (HU)'
+            cbar = self.fig.colorbar(self.points)
+            cbar.set_label(c_bar_title)
+            cbar.set_alpha(1)
+            cbar.draw_all()
 
 
 class CombinedTibia4DPlot:
@@ -456,7 +461,7 @@ class PredictedClustersPlot:
 
 
 class PointCloudWithPolygonsPlot:
-    def __init__(self, point_cloud, polygon_vertices_array, other_lines=None, title='Point Cloud With Polygons Plot'):
+    def __init__(self, point_cloud, polygon_vertices_array, other_lines=None, title='Point Cloud With Polygons Plot', showOnlyGraphics=False):
         self.point_cloud = point_cloud
         self.polygon_vertices_array = polygon_vertices_array
         self.title = title
@@ -466,6 +471,9 @@ class PointCloudWithPolygonsPlot:
         self.lines = other_lines if other_lines else []
         self.plot_lines()
         self.plot_polygons()
+        if showOnlyGraphics:
+            plt.grid(False)
+            plt.axis('off')
 
     def plot_polygons(self):
         for vertices in self.polygon_vertices_array:
@@ -484,7 +492,7 @@ class PointCloudWithPolygonsPlot:
 
 
 class GiftWrapPlot:
-    def __init__(self, convex_hull_mesh, points, title='Gift Wrap Plot', c='#FF0000'):
+    def __init__(self, convex_hull_mesh, points, title='Gift Wrap Plot', c='#FF0000', showOnlyGraphics=False):
         self.convex_hull_mesh = convex_hull_mesh
         self.title = title
         point_cloud_plot = PointCloudPlot(points,
@@ -501,6 +509,7 @@ class GiftWrapPlot:
                              alpha=0.2,
                              lw=0.5,
                              antialiased=True)
+        self.showOnlyGraphics = showOnlyGraphics
         self.__configure_plot()
 
     def __configure_plot(self):
@@ -512,6 +521,9 @@ class GiftWrapPlot:
         self.ax.set_ylabel('$y$')
         self.ax.set_zlabel('$z$')
         self.ax.set_title(self.title)
+        if self.showOnlyGraphics:
+            plt.grid(False)
+            plt.axis('off')
 
     def plot(self):
         plt.show()
