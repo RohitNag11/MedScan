@@ -1,6 +1,5 @@
 import numpy as np
 from .helpers import geometry as geom
-import medscan.viewers as msv
 
 
 class PointCloudManipulator:
@@ -22,12 +21,11 @@ class PointCloudManipulator:
             max(implant_roi_point_cloud[:, 3]),
         )
         self.roi_points = implant_roi_point_cloud
-        # msv.PointCloudPlot(implant_roi_point_cloud, normalised=False)
-        centered_points = self.__get_dim_normalised_point_cloud(self.roi_points, side)
+        centered_points = self.__get_point_cloud_in_tibia_space(self.roi_points, side)
         self.centred_nomalised_points = self.__get_normalized_point_cloud(
             centered_points
         )
-        if side == "right":
+        if side == "left":
             self.cn_x_bounds = (
                 min(self.centred_nomalised_points[:, 0]),
                 max(self.centred_nomalised_points[:, 0]),
@@ -65,13 +63,11 @@ class PointCloudManipulator:
         ]
         return np.array(list(zip(x, y, z, normalized_density)))
 
-    def __get_dim_normalised_point_cloud(self, point_cloud, side):
+    def __get_point_cloud_in_tibia_space(self, point_cloud, side):
         """
-        Normalizes a 4D point cloud to be within a bounding cube of dimension 1 in the first 3 dimensions.
-        If the 'side' argument is 'left', it scales the x-values to be between -0.5 and 0.5.
-        If the 'side' argument is 'right', it scales the x-values to be between 0.5 and -0.5.
-        The y- and z-values are scaled to be between -0.5 and 0.5 in both cases.
-        The 4th dimension is left unchanged.
+        Dimensionally normalises the point cloud to the tibial coordinate system.
+        - If the 'side' argument is 'left', it mirrors the point cloud across the y-axis.
+        - The origin is set to the top slices left most point in the x direction.
 
         Args:
         - point_cloud: a numpy array of shape (N, 4) representing the point cloud
@@ -80,33 +76,22 @@ class PointCloudManipulator:
         Returns:
         - a numpy array of shape (N, 4) representing the normalized point cloud
         """
-        # Extract the first 3 dimensions of the point cloud
-        point_cloud_xyz = point_cloud[:, :3]
-
-        # Compute the bounding box of the point cloud
-        min_vals = np.min(point_cloud_xyz, axis=0)
-        max_vals = np.max(point_cloud_xyz, axis=0)
-
-        # Compute the center of the bounding box
-        center = (min_vals + max_vals) / 2
-
-        # Translate the point cloud to be centered at the origin
-        point_cloud_xyz = point_cloud_xyz - center
-
-        # Scale the point cloud to be within a bounding cube of dimension 1
-        max_range = np.max(np.abs(point_cloud_xyz[:, 2]))
-        scale_factor = 0.5 / max_range
-        point_cloud_xyz = point_cloud_xyz * scale_factor
-
-        if side == "left":
-            point_cloud_xyz[:, 0] *= -1
-
-        # Concatenate the normalized xyz coordinates with the unchanged 4th dimension
-        point_cloud_norm = np.concatenate([point_cloud_xyz, point_cloud[:, 3:]], axis=1)
-        return point_cloud_norm
-        # point_cloud_norm = np.concatenate(
-        #     [point_cloud_xyz, point_cloud[:, 3:]], axis=1)
-        # return point_cloud_norm
+        point_cloud_copy = point_cloud.copy()
+        if side == "right":
+            point_cloud_copy[:, 0] *= -1
+        # Make the x-axis origin the left most point in the x direction
+        origin_x = np.min(point_cloud_copy[:, 0])
+        # Make the z-axis origin the top most point in the z direction
+        origin_z = np.max(point_cloud_copy[:, 2])
+        # Find all points that have the same x coordinate as the origin
+        origin_x_points = point_cloud_copy[point_cloud_copy[:, 0] == origin_x]
+        # Make the y-axis origin the mean of the y coordinates of the points with the same x coordinate as the origin
+        origin_y = np.mean(origin_x_points[:, 1])
+        # Translate the point cloud so that the origin is at [0, 0, 0]:
+        point_cloud_copy = point_cloud_copy - np.array(
+            [origin_x, origin_y, origin_z, 0]
+        )
+        return point_cloud_copy
 
     def convert_point_cloud_to_cn_density_space(self, point_cloud):
         x, y, z, density = zip(*point_cloud)
