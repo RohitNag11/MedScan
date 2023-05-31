@@ -29,7 +29,7 @@ class PointCloudManipulator:
         # msv.PointCloudPlot(
         #     self.centred_nomalised_points, title=f"Point Cloud test - {side}"
         # ).show()
-        self.cn_origin_y_depth = np.max(self.centred_nomalised_points[:, 1])
+        # self.cn_origin_y_depth = np.max(self.centred_nomalised_points[:, 1])
         if side == "left":
             self.cn_x_bounds = (
                 min(self.centred_nomalised_points[:, 0]),
@@ -72,7 +72,8 @@ class PointCloudManipulator:
         """
         Dimensionally normalises the point cloud to the tibial coordinate system.
         - If the 'side' argument is 'left', it mirrors the point cloud across the y-axis.
-        - The origin is set to the top slices left most point in the x direction.
+        - The x-origin is set to the top slices left most point in the x direction.
+        - The y-origin is set to the bottom-most point in the y direction.
 
         Args:
         - point_cloud: a numpy array of shape (N, 4) representing the point cloud
@@ -88,10 +89,8 @@ class PointCloudManipulator:
         origin_x = np.min(point_cloud_copy[:, 0])
         # Make the z-axis origin the top most point in the z direction
         origin_z = np.max(point_cloud_copy[:, 2])
-        # Find all points that have the same x coordinate as the origin
-        origin_x_points = point_cloud_copy[point_cloud_copy[:, 0] == origin_x]
-        # Make the y-axis origin the mean of the y coordinates of the points with the same x coordinate as the origin
-        origin_y = np.mean(origin_x_points[:, 1])
+        # Make the y-axis origin the bottom most point in the y direction
+        origin_y = np.min(point_cloud_copy[:, 1])
         # Translate the point cloud so that the origin is at [0, 0, 0]:
         point_cloud_copy = point_cloud_copy - np.array(
             [origin_x, origin_y, origin_z, 0]

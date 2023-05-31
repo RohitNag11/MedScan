@@ -20,8 +20,6 @@ class BoneStats:
         self.implant_x_sizes = []
         self.implant_y_sizes = []
         self.implant_z_sizes = []
-        self.implant_diag_widths = []
-        self.implant_y_origin_depths = []
         self.roi_norm_xy_centers = []
         self.roi_cyl_avg_densities = []
         self.roi_cyl_xyz_sizes = []
@@ -31,8 +29,6 @@ class BoneStats:
         implant_x_size,
         implant_y_size,
         implant_z_size,
-        implant_diag_width,
-        implant_y_origin_depth,
         roi_norm_xy_center,
         roi_cyl_avg_density,
         roi_cyl_xyz_size,
@@ -40,8 +36,6 @@ class BoneStats:
         self.implant_x_sizes.append(implant_x_size)
         self.implant_y_sizes.append(implant_y_size)
         self.implant_z_sizes.append(implant_z_size)
-        self.implant_diag_widths.append(implant_diag_width)
-        self.implant_y_origin_depths.append(implant_y_origin_depth)
         self.roi_cyl_avg_densities.append(roi_cyl_avg_density)
         self.roi_cyl_xyz_sizes.append(roi_cyl_xyz_size)
         self.roi_norm_xy_centers.append(roi_norm_xy_center)
@@ -57,8 +51,6 @@ class BoneStats:
             "implant_x_size": self.implant_x_sizes,
             "implant_y_size": self.implant_y_sizes,
             "implant_z_size": self.implant_z_sizes,
-            "implant_diag_width": self.implant_diag_widths,
-            "implant_y_origin_depth": self.implant_y_origin_depths,
             "roi_norm_x_center": self.roi_norm_xy_centers[:, 0],
             "roi_norm_y_center": self.roi_norm_xy_centers[:, 1],
             "roi_cyl_avg_density": self.roi_cyl_avg_densities,
@@ -131,7 +123,6 @@ def tibia_analysis(
     implant_roi_points = bone_CT.implant_roi_points_4d
     # Get the implant size
     implant_x_size, implant_y_size, implant_z_size = bone_CT.get_implant_size()
-    implant_diag_width = (implant_x_size**2 + implant_y_size**2) ** 0.5
 
     # Create a point cloud manipulator for the implant roi point cloud
     bone_points_manipulator = msm.PointCloudManipulator(
@@ -140,8 +131,6 @@ def tibia_analysis(
     # Center and normalise the implant roi point cloud
     implant_roi_cn_points = bone_points_manipulator.centred_nomalised_points
 
-    # Get the implant roi origin y distance from the top
-    implant_y_origin_depth = bone_points_manipulator.cn_origin_y_depth
     filter_2_points = filter_points_by_desired_peg_roi_vol(
         implant_roi_cn_points, init_density_percentile_thresh, desired_peg_vol_ratio
     )
@@ -179,8 +168,6 @@ def tibia_analysis(
         implant_x_size,
         implant_y_size,
         implant_z_size,
-        implant_diag_width,
-        implant_y_origin_depth,
         roi_norm_xy_center,
         roi_cyl_norm_avg_density,
         roi_un_cn_cyl_xyz_size,
@@ -219,39 +206,10 @@ def main(
     )
 
 
-def analyse_roi_data_multioutput(res_path):
-    df = pd.read_csv(res_path)
-    # Define the input and output columns
-    input_cols = ["implant_x_size", "implant_y_size"]
-    output_cols = [
-        "implant_y_origin_depth",
-        "roi_norm_x_center",
-        "roi_norm_y_center" "roi_cyl_x_size",
-        "roi_cyl_y_size",
-        "roi_cyl_z_size",
-    ]
-    # Create the input and output dataframes
-    X = df[input_cols]
-    y = df[output_cols]
-    # Split the data into a training set and a test set
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-    # Define the base estimator - in this case, a Random Forest
-    base_est = RandomForestRegressor(random_state=42)
-    # Define the multioutput regressor
-    mor = MultiOutputRegressor(base_est)
-    # Train the model
-    mor.fit(X_train, y_train)
-    # Predict output using the model
-    y_pred = mor.predict(X_test)
-
-
 def plot_peg_regions_from_data(res_path, prefix="Batch"):
     df = pd.read_csv(res_path)
     implant_x_sizes = df["implant_x_size"]
     implant_y_sizes = df["implant_y_size"]
-    implant_y_origin_depths = df["implant_y_origin_depth"]
     roi_x_centers = df["roi_norm_x_center"]
     roi_y_centers = df["roi_norm_y_center"]
     roi_cyl_x_sizes = df["roi_cyl_x_size"]
@@ -261,7 +219,6 @@ def plot_peg_regions_from_data(res_path, prefix="Batch"):
         msv.ImplantVisualiser(
             implant_x_size=implant_x_sizes[i],
             implant_y_size=implant_y_sizes[i],
-            implant_y_origin_depth=implant_y_origin_depths[i],
             roi_x_center=roi_x_centers[i],
             roi_y_center=roi_y_centers[i],
             roi_cyl_x_size=roi_cyl_x_sizes[i],
@@ -297,18 +254,44 @@ def analyse_roi_results(
         )
 
 
+def get_peg_regions_from_implant_sizes(
+    resultsClassifier: msc.ImplantPegResultsClassifier,
+    deg: int,
+    implant_x_sizes: list[float],
+    implant_y_sizes: list[float],
+    output_path: str = None,
+):
+    input_dict = {"implant_x_size": implant_x_sizes, "implant_y_size": implant_y_sizes}
+    output_dict = resultsClassifier.get_output_from_inputs(
+        deg=deg,
+        input_dict=input_dict,
+        output_columns=[
+            "roi_norm_x_center",
+            "roi_norm_y_center",
+            "roi_cyl_x_size",
+            "roi_cyl_y_size",
+            "roi_cyl_z_size",
+        ],
+    )
+    combined_input_output_dict = {**output_dict, **input_dict}
+    combined_input_output_pd = pd.DataFrame(combined_input_output_dict)
+    if output_path is not None:
+        combined_input_output_pd.to_csv(output_path)
+
+
 if __name__ == "__main__":
     output_dir = r"data/results/"
     study_name = "patient_roi_comparisons"
     raw_results_path = rf"{output_dir}{study_name}.csv"
     batch_results_path = rf"{output_dir}{study_name}_batches.csv"
+    manual_input_path = rf"{output_dir}{study_name}_manual_inputs.csv"
 
     ## Get results:
     # patient_ids = get_patient_ids((3, 9))
     # desired_peg_vol_ratio = 1 / 50
     # main(patient_ids, output_dir, study_name, desired_peg_vol_ratio)
 
-    ## Analyse the results:
+    # # Analyse the results:
     resultsClassifier = msc.ImplantPegResultsClassifier(raw_results_path)
     analyse_roi_results(
         resultsClassifier,
@@ -330,19 +313,11 @@ if __name__ == "__main__":
         input_cols=["implant_x_size", "implant_y_size"],
         outlier_thresh=1.5,
     )
-    # analyse_roi_results(
-    #     resultsClassifier,
-    #     type="multi",
-    #     deg=1,
-    #     input_cols=["implant_x_size", "implant_y_size"],
-    #     outlier_thresh=1.5,
-    # )
     batch_size = 6
     resultsClassifier.analyse_batch_locations(
         deg=1,
         input_columns=["implant_x_size", "implant_y_size"],
         output_columns=[
-            "implant_y_origin_depth",
             "roi_norm_x_center",
             "roi_norm_y_center",
             "roi_cyl_x_size",
@@ -356,7 +331,6 @@ if __name__ == "__main__":
         deg=1,
         input_columns=["implant_x_size", "implant_y_size"],
         output_columns=[
-            "implant_y_origin_depth",
             "roi_norm_x_center",
             "roi_norm_y_center",
             "roi_cyl_x_size",
@@ -367,8 +341,17 @@ if __name__ == "__main__":
     )
     plot_peg_regions_from_data(batch_results_path, prefix="Batch")
 
+    # Get peg regions from implant sizes:
+    get_peg_regions_from_implant_sizes(
+        resultsClassifier=resultsClassifier,
+        deg=1,
+        implant_x_sizes=[25, 26.5, 27.5, 29.5, 30.5, 33],
+        implant_y_sizes=[44.5, 47.5, 51, 53, 57, 58],
+        output_path=manual_input_path,
+    )
+    plot_peg_regions_from_data(manual_input_path, prefix="Size")
+
+
 """
 TODO:
-- create a multi output model that takes in implant sizes and ouputs roi sizes and locations
-- modify ImplantVisualiser to label the implant and roi sizes and locations
 """

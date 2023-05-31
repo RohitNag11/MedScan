@@ -479,6 +479,21 @@ class ImplantPegResultsClassifier:
 
         return X_fit
 
+    def get_output_from_inputs(self, deg, input_dict, output_columns):
+        input_columns = list(input_dict.keys())
+        if output_columns is None:
+            output_columns = [col for col in self.columns if col not in input_columns]
+        X = self.df[input_columns]
+        Y = self.df[output_columns]
+
+        model, poly, Y_pred, coef_matrix = self.__regression_multi_param(X, Y, deg)
+        # input_values = np.array(input_values).reshape(1, -1)
+        X_fit = pd.DataFrame(input_dict)
+        Y_fit = model.predict(poly.transform(X_fit))
+
+        output = {col: Y_fit[:, i] for i, col in enumerate(output_columns)}
+        return output
+
     def __batch_inputs(self, deg, X, Y, batch_size):
         model, poly, Y_pred, coef_matrix = self.__regression_multi_param(X, Y, deg)
         X_fit = self.generate_X_fit(X, num_points=1000)

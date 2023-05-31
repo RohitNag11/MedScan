@@ -747,7 +747,6 @@ class ImplantVisualiser:
         self,
         implant_x_size,
         implant_y_size,
-        implant_y_origin_depth,
         roi_x_center,
         roi_y_center,
         roi_cyl_x_size,
@@ -759,7 +758,7 @@ class ImplantVisualiser:
         self.title = title
         self.implant_x_size = implant_x_size
         self.implant_y_size = implant_y_size
-        self.implant_y_origin_depth = implant_y_origin_depth
+        self.implant_y_widest_loc = 0.65 * implant_y_size
         self.roi_x_center = roi_x_center
         self.roi_y_center = roi_y_center
         self.roi_cyl_x_size = roi_cyl_x_size
@@ -778,18 +777,12 @@ class ImplantVisualiser:
         implant_patch = patches.PathPatch(
             implant_outline_path(
                 [
-                    (
-                        self.implant_x_size,
-                        self.implant_y_origin_depth - self.implant_y_size,
-                    ),
-                    (0, self.implant_y_origin_depth - self.implant_y_size),
+                    (self.implant_x_size, 0),
                     (0, 0),
-                    (0, self.implant_y_origin_depth),
-                    (self.implant_x_size, self.implant_y_origin_depth),
-                    (
-                        self.implant_x_size,
-                        self.implant_y_origin_depth - self.implant_y_size,
-                    ),
+                    (0, self.implant_y_widest_loc),
+                    (0, self.implant_y_size),
+                    (self.implant_x_size, self.implant_y_size),
+                    (self.implant_x_size, 0),
                 ],
                 [
                     implant_outline_path.MOVETO,
@@ -827,10 +820,10 @@ class ImplantVisualiser:
     def __label_sizes(self):
         # Label implant sizes
         x_size_arrow = ConnectionPatch(
-            xyA=(0, self.implant_y_origin_depth - self.implant_y_size - 3),
+            xyA=(0, 0 - 3),
             xyB=(
                 self.implant_x_size,
-                self.implant_y_origin_depth - self.implant_y_size - 3,
+                0 - 3,
             ),
             coordsA="data",
             coordsB="data",
@@ -845,20 +838,20 @@ class ImplantVisualiser:
         self.ax.add_artist(x_size_arrow)
         self.ax.text(
             self.implant_x_size / 2,
-            self.implant_y_origin_depth - self.implant_y_size - 2.5,
+            0 - 3.5,
             f"{self.implant_x_size:.2f}",
             horizontalalignment="center",
-            verticalalignment="bottom",
+            verticalalignment="top",
             fontsize=8,
             bbox=dict(
                 facecolor="#FFFFFF00", edgecolor="#00000000", boxstyle="round,pad=0.2"
             ),
         )
         y_size_arrow = ConnectionPatch(
-            xyA=(self.implant_x_size + 3, self.implant_y_origin_depth),
+            xyA=(self.implant_x_size + 3, self.implant_y_size),
             xyB=(
                 self.implant_x_size + 3,
-                self.implant_y_origin_depth - self.implant_y_size,
+                0,
             ),
             coordsA="data",
             coordsB="data",
@@ -873,7 +866,7 @@ class ImplantVisualiser:
         self.ax.add_artist(y_size_arrow)
         self.ax.text(
             self.implant_x_size + 3.5,
-            self.implant_y_origin_depth - self.implant_y_size / 2,
+            self.implant_y_size / 2,
             f"{self.implant_y_size:.2f}",
             horizontalalignment="left",
             verticalalignment="center",
@@ -885,11 +878,11 @@ class ImplantVisualiser:
         roi_x_size_arrow = ConnectionPatch(
             xyA=(
                 self.roi_x_center - self.roi_cyl_x_size / 2,
-                self.roi_y_center - self.roi_cyl_y_size / 2 - 2,
+                self.roi_y_center + self.roi_cyl_y_size / 2 + 2,
             ),
             xyB=(
                 self.roi_x_center + self.roi_cyl_x_size / 2,
-                self.roi_y_center - self.roi_cyl_y_size / 2 - 2,
+                self.roi_y_center + self.roi_cyl_y_size / 2 + 2,
             ),
             coordsA="data",
             coordsB="data",
@@ -904,10 +897,10 @@ class ImplantVisualiser:
         self.ax.add_artist(roi_x_size_arrow)
         self.ax.text(
             self.roi_x_center,
-            self.roi_y_center - self.roi_cyl_y_size / 2 - 2.5,
+            self.roi_y_center + self.roi_cyl_y_size / 2 + 2.5,
             f"{self.roi_cyl_x_size:.2f}",
             horizontalalignment="center",
-            verticalalignment="top",
+            verticalalignment="bottom",
             fontsize=8,
             bbox=dict(
                 facecolor="#FFFFFF00", edgecolor="#00000000", boxstyle="round,pad=0.2"
@@ -1019,8 +1012,8 @@ class ImplantVisualiser:
         self.ax.set_xlim([-15, self.implant_x_size + 15])
         self.ax.set_ylim(
             [
-                self.implant_y_origin_depth - self.implant_y_size - 15,
-                self.implant_y_origin_depth + 15,
+                0 - 15,
+                self.implant_y_size + 15,
             ]
         )
         self.ax.set_xlabel("X (mm)")
