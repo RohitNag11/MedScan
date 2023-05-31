@@ -8,18 +8,10 @@ from medscan import (
 )
 from medscan.helpers import geometry as geom
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-from matplotlib.lines import Line2D
-import pickle
-from tqdm import tqdm
-import trimesh
 import pandas as pd
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn import linear_model
-from scipy import stats
+from sklearn.model_selection import train_test_split
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.ensemble import RandomForestRegressor
 
 
 class BoneStats:
@@ -227,160 +219,35 @@ def main(
     )
 
 
-def analyse_roi_data_2d(res_path):
+def analyse_roi_data_multioutput(res_path):
     df = pd.read_csv(res_path)
-    analysis_2d_plot(df)
-
-
-def analyse_roi_data_3d(res_path):
-    df = pd.read_csv(res_path)
-    analysis_3d_plot(df)
-
-
-def __name_param(param):
-    # split on underscores and capitalise first letter of each word
-    name = " ".join([word.capitalize() for word in param.split("_")])
-    # Add (mm) to any parameter that is not a density
-    if "density" not in name:
-        name += " (mm)"
-    return name
-
-
-def analysis_2d_plot(df):
-    for size_column in ["implant_x_size", "implant_y_size", "implant_diag_width"]:
-        other_columns = [col for col in df.columns if col != size_column]
-        ncols = np.ceil(len(other_columns) ** 0.5).astype(int)
-        nrows = np.ceil(len(other_columns) / ncols).astype(int)
-        size_label = __name_param(size_column)
-        fig, ax = plt.subplots(ncols=ncols, nrows=nrows, sharex=True)
-        fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        fig.suptitle(f"{size_label} vs. Other Factors", fontsize=10)
-        for i, col in enumerate(other_columns):
-            factor_label = __name_param(col)
-            ax_i, ax_j = i // ncols, i % ncols
-            ax[ax_i, ax_j].scatter(df[size_column].to_numpy(), df[col].to_numpy())
-            ax[ax_i, ax_j].set_title(f"{size_label} vs. {factor_label}", fontsize=8)
-            ax[ax_i, ax_j].set_xlabel(f"{size_label}", fontsize=6)
-            ax[ax_i, ax_j].set_ylabel(f"{factor_label}", fontsize=6)
-        plt.show()
-
-
-def fit_3d_regression(x_data, y_data, z_data, poly_degree=2, outlier_thres=1.5):
-    # Fit a 3d regression to the data:
-    x_data = np.array(x_data)
-    y_data = np.array(y_data)
-    z_data = np.array(z_data)
-
-    X = np.column_stack((x_data, y_data))
-    Y = z_data
-    poly = PolynomialFeatures(degree=poly_degree)
-    X_ = poly.fit_transform(X)
-
-    # Fit linear model
-    clf = linear_model.LinearRegression()
-    clf.fit(X_, Y)
-
-    # Evaluate the model using R^2:
-    r2 = clf.score(X_, Y)
-
-    # Get the coefficients of the regression:
-    coeffs = clf.coef_
-
-    # Calculate residuals
-    predictions = clf.predict(X_)
-    residuals = Y - predictions
-
-    # Find outliers
-    q1, q3 = np.percentile(residuals, [25, 75])
-    iqr = q3 - q1
-    lower_bound = q1 - (outlier_thres * iqr)
-    upper_bound = q3 + (outlier_thres * iqr)
-
-    outliers = (residuals < lower_bound) | (residuals > upper_bound)
-    inliers = ~outliers
-
-    return coeffs, r2, clf, poly, X, outliers, inliers, residuals
-
-
-def analysis_3d_plot(df, poly_fit=True, poly_degree=2, outlier_thres=1.5):
-    # Create 3d scatter plots of implant_x_size vs. implant_y_size vs. other factors:
-    for col in df.columns[2:]:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-
-        # Fit and get outliers, inliers, and residuals
-        coeffs, r2, clf, poly, X, outliers, inliers, residuals = fit_3d_regression(
-            df["implant_x_size"].to_numpy(),
-            df["implant_y_size"].to_numpy(),
-            df[col].to_numpy(),
-            poly_degree=poly_degree,
-            outlier_thres=outlier_thres,
-        )
-
-        # Plot inliers in blue and outliers in red
-        ax.scatter(X[inliers, 0], X[inliers, 1], df[col].to_numpy()[inliers], c="b")
-        ax.scatter(X[outliers, 0], X[outliers, 1], df[col].to_numpy()[outliers], c="r")
-
-        ax.set_title(f"Implant Size vs. {__name_param(col)}")
-        ax.set_xlabel("Implant X Size (mm)")
-        ax.set_ylabel("Implant Y Size (mm)")
-        ax.set_zlabel(f"{__name_param(col)}")
-
-        if poly_fit:
-            print(f"{col} r2 score: {r2}")
-            plot_poly_regression_fit_3d(
-                ax, clf, poly, X, df[col].to_numpy(), residuals, outliers, inliers
-            )
-
-        plt.show()
-
-
-def plot_poly_regression_fit_3d(ax, clf, poly, X, Y, residuals, outliers, inliers):
-    N = 20
-    x0_bounds = (np.min(X[:, 0]), np.max(X[:, 0]))
-    x1_bounds = (np.min(X[:, 1]), np.max(X[:, 1]))
-    predict_x0, predict_x1 = np.meshgrid(
-        np.linspace(*x0_bounds, N), np.linspace(*x1_bounds, N)
-    )
-    predict_x = np.concatenate(
-        (predict_x0.reshape(-1, 1), predict_x1.reshape(-1, 1)), axis=1
-    )
-    predict_x_ = poly.fit_transform(predict_x)
-    predict_y = clf.predict(predict_x_)
-
-    # Plot surface
-    ax.plot_surface(
-        predict_x0,
-        predict_x1,
-        predict_y.reshape(predict_x0.shape),
-        rstride=1,
-        cstride=1,
-        cmap=cm.jet,
-        alpha=0.5,
-    )
-
-    # Plot data points
-    ax.scatter(X[inliers, 0], X[inliers, 1], Y[inliers], c="b", label="Inliers")
-    ax.scatter(X[outliers, 0], X[outliers, 1], Y[outliers], c="r", label="Outliers")
-
-    # Plot predicted points and residuals
-    Y_pred = clf.predict(poly.fit_transform(X))
-    ax.scatter(X[:, 0], X[:, 1], Y_pred, c="g", label="Predicted")
-    for i in range(len(X)):
-        ax.plot([X[i, 0], X[i, 0]], [X[i, 1], X[i, 1]], [Y[i], Y_pred[i]], "k--")
-
-    # Create legend
-    # Add a surface legend, since the colors map to the surface plot
-    legend_elements = [
-        Line2D([0], [0], marker="o", color="b", label="Inliers", linestyle="None"),
-        Line2D([0], [0], marker="o", color="r", label="Outliers", linestyle="None"),
-        Line2D([0], [0], marker="o", color="g", label="Predicted", linestyle="None"),
-        Line2D([0], [0], color="k", label="Residuals", linestyle="--"),
+    # Define the input and output columns
+    input_cols = ["implant_x_size", "implant_y_size"]
+    output_cols = [
+        "implant_y_origin_depth",
+        "roi_norm_x_center",
+        "roi_norm_y_center" "roi_cyl_x_size",
+        "roi_cyl_y_size",
+        "roi_cyl_z_size",
     ]
-    ax.legend(handles=legend_elements, loc="best")
+    # Create the input and output dataframes
+    X = df[input_cols]
+    y = df[output_cols]
+    # Split the data into a training set and a test set
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    # Define the base estimator - in this case, a Random Forest
+    base_est = RandomForestRegressor(random_state=42)
+    # Define the multioutput regressor
+    mor = MultiOutputRegressor(base_est)
+    # Train the model
+    mor.fit(X_train, y_train)
+    # Predict output using the model
+    y_pred = mor.predict(X_test)
 
 
-def plot_peg_regions_for_all_patients(res_path):
+def plot_peg_regions_from_data(res_path, prefix="Batch"):
     df = pd.read_csv(res_path)
     implant_x_sizes = df["implant_x_size"]
     implant_y_sizes = df["implant_y_size"]
@@ -390,8 +257,7 @@ def plot_peg_regions_for_all_patients(res_path):
     roi_cyl_x_sizes = df["roi_cyl_x_size"]
     roi_cyl_y_sizes = df["roi_cyl_y_size"]
     for i in range(len(df)):
-        patient_no = int(i / 2)
-        side = "Left" if i % 2 == 0 else "Right"
+        no = int(i)
         msv.ImplantVisualiser(
             implant_x_size=implant_x_sizes[i],
             implant_y_size=implant_y_sizes[i],
@@ -400,14 +266,42 @@ def plot_peg_regions_for_all_patients(res_path):
             roi_y_center=roi_y_centers[i],
             roi_cyl_x_size=roi_cyl_x_sizes[i],
             roi_cyl_y_size=roi_cyl_y_sizes[i],
-            title=f"Patient {patient_no}: {side} Implant Peg Region",
+            title=f"{prefix} {no}: Implant Peg Region",
         ).show()
+
+
+def analyse_roi_results(
+    resultsClassifier: msc.ImplantPegResultsClassifier,
+    type: str = "2d",
+    deg: int = 1,
+    input_cols: list[str] = ["implant_x_size", "implant_y_size"],
+    output_cols: list[str] = None,
+    outlier_thresh: float = 1.5,
+):
+    if type == "2d":
+        resultsClassifier.analyse_data_2d(
+            deg=deg, input_columns=input_cols, output_columns=output_cols
+        )
+    elif type == "3d":
+        resultsClassifier.analyse_data_3d(
+            deg=deg,
+            input_columns=input_cols,
+            output_columns=output_cols,
+            outlier_thresh=outlier_thresh,
+        )
+    elif type == "multi":
+        resultsClassifier.analyse_data_multi_param(
+            deg=deg,
+            input_columns=input_cols,
+            output_columns=output_cols,
+        )
 
 
 if __name__ == "__main__":
     output_dir = r"data/results/"
     study_name = "patient_roi_comparisons"
-    results_path = rf"{output_dir}{study_name}.csv"
+    raw_results_path = rf"{output_dir}{study_name}.csv"
+    batch_results_path = rf"{output_dir}{study_name}_batches.csv"
 
     ## Get results:
     # patient_ids = get_patient_ids((3, 9))
@@ -415,9 +309,63 @@ if __name__ == "__main__":
     # main(patient_ids, output_dir, study_name, desired_peg_vol_ratio)
 
     ## Analyse the results:
-    analyse_roi_data_2d(results_path)
-    analyse_roi_data_3d(results_path)
-    plot_peg_regions_for_all_patients(results_path)
+    resultsClassifier = msc.ImplantPegResultsClassifier(raw_results_path)
+    analyse_roi_results(
+        resultsClassifier,
+        type="2d",
+        deg=2,
+        input_cols=["implant_x_size", "implant_y_size"],
+    )
+    analyse_roi_results(
+        resultsClassifier,
+        type="3d",
+        deg=2,
+        input_cols=["implant_x_size", "implant_y_size"],
+        outlier_thresh=1.5,
+    )
+    analyse_roi_results(
+        resultsClassifier,
+        type="3d",
+        deg=1,
+        input_cols=["implant_x_size", "implant_y_size"],
+        outlier_thresh=1.5,
+    )
+    # analyse_roi_results(
+    #     resultsClassifier,
+    #     type="multi",
+    #     deg=1,
+    #     input_cols=["implant_x_size", "implant_y_size"],
+    #     outlier_thresh=1.5,
+    # )
+    batch_size = 6
+    resultsClassifier.analyse_batch_locations(
+        deg=1,
+        input_columns=["implant_x_size", "implant_y_size"],
+        output_columns=[
+            "implant_y_origin_depth",
+            "roi_norm_x_center",
+            "roi_norm_y_center",
+            "roi_cyl_x_size",
+            "roi_cyl_y_size",
+            "roi_cyl_z_size",
+        ],
+        batch_size=batch_size,
+        output_path=batch_results_path,
+    )
+    resultsClassifier.visualise_output_for_batches(
+        deg=1,
+        input_columns=["implant_x_size", "implant_y_size"],
+        output_columns=[
+            "implant_y_origin_depth",
+            "roi_norm_x_center",
+            "roi_norm_y_center",
+            "roi_cyl_x_size",
+            "roi_cyl_y_size",
+            "roi_cyl_z_size",
+        ],
+        batch_size=batch_size,
+    )
+    plot_peg_regions_from_data(batch_results_path, prefix="Batch")
 
 """
 TODO:
