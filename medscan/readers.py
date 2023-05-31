@@ -268,6 +268,9 @@ class BoneCT:
         )
         z_min = self.bone_mesh.z_bounds[1] - self.roi_depth
         mask &= self.all_points_4d[:, 2] >= z_min
+        # z_depth = max(self.all_points_4d[mask][:, 2]) - min(
+        #     self.all_points_4d[mask][:, 2]
+        # )
         return self.all_points_4d[mask]
 
     def __get_implant_roi_points_4d(self, filter_percent):
@@ -281,9 +284,9 @@ class BoneCT:
         )
         x, z = top_most_points.T
         implant_z_plane = self.__get_implant_z_plane(top_most_points)
-        # Remove 3cm from the bottom of the tibia flat region (to remove cartilage)
+        # Remove 3mm from the bottom of the tibia flat region (to remove cartilage)
         filtered_points = self.medial_points_4d[
-            self.medial_points_4d[:, 2] < implant_z_plane - 3
+            self.medial_points_4d[:, 2] < (implant_z_plane - 3)
         ]
         return filtered_points
 
@@ -312,19 +315,8 @@ class BoneCT:
 
     def get_implant_size(self) -> float:
         """Returns the diagonal length of the implant."""
-        implant_roi_points_by_z = geom.split_point_cloud_by_z(
-            self.implant_roi_points_4d
-        )
-        implant_x_size = (
-            implant_roi_points_by_z[0][:, 0].max()
-            - implant_roi_points_by_z[0][:, 0].min()
-        )
-        implant_y_size = (
-            implant_roi_points_by_z[0][:, 1].max()
-            - implant_roi_points_by_z[0][:, 1].min()
-        )
-        implant_z_size = (
-            implant_roi_points_by_z[0][:, 2].max()
-            - implant_roi_points_by_z[0][:, 2].min()
-        )
+        implant_roi_points = self.implant_roi_points_4d
+        implant_x_size = implant_roi_points[:, 0].max() - implant_roi_points[:, 0].min()
+        implant_y_size = implant_roi_points[:, 1].max() - implant_roi_points[:, 1].min()
+        implant_z_size = implant_roi_points[:, 2].max() - implant_roi_points[:, 2].min()
         return implant_x_size, implant_y_size, implant_z_size

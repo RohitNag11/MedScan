@@ -1,5 +1,6 @@
 import numpy as np
 from .helpers import geometry as geom
+from medscan import viewers as msv
 
 
 class PointCloudManipulator:
@@ -25,6 +26,10 @@ class PointCloudManipulator:
         self.centred_nomalised_points = self.__get_normalized_point_cloud(
             centered_points
         )
+        # msv.PointCloudPlot(
+        #     self.centred_nomalised_points, title=f"Point Cloud test - {side}"
+        # ).show()
+        self.cn_origin_y_depth = np.max(self.centred_nomalised_points[:, 1])
         if side == "left":
             self.cn_x_bounds = (
                 min(self.centred_nomalised_points[:, 0]),
